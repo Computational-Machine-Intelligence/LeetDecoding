@@ -2,6 +2,14 @@
 
 ### 1. installation
 
+#### 1.1 Source Code Install
+```bash
+conda create -n efficient_linear_decoding python=3.9
+conda activate efficient_linear_decoding
+pip install requirements.txt
+```
+
+#### 1.2 pip Install
 ```bash
 pip install efficient_linear_decoding
 ```
