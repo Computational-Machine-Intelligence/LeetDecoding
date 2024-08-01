@@ -1,6 +1,5 @@
 import torch
 from methods.linear_attn import get_full_mask,linear_attn
-from icecream import ic
 from methods.FleetAttention import FleetAttention
 
 

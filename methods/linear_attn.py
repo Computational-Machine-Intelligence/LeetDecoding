@@ -1,6 +1,5 @@
 import torch
 import math
-from icecream import ic
 
 # Construct weight decay vector
 def _build_slope_tensor(n_attention_heads: int):

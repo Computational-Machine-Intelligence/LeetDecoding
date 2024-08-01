@@ -222,16 +222,3 @@ class LightningAttention2(torch.autograd.Function):
     
 lightning_attn2 = LightningAttention2.apply
 
-
-
-if __name__=='__main__':
-    print(drv.Device(0).name())
-    b,h,n,d = 2, 32, 512, 128
-    Q = torch.randn((b,h,n,d),dtype=torch.float32,device='cuda:0')
-    K = torch.randn((b,h,n,d),dtype=torch.float32,device='cuda:0')
-    V = torch.randn((b,h,n,d),dtype=torch.float32,device='cuda:0')
-    M = torch.tril(torch.ones((n,n),dtype=torch.float32,device='cuda:0'))
-    correct_BCMV = torch.matmul(torch.matmul(Q,K.transpose(2,3)) * M,V)
-    gamma = torch.ones((h,),dtype=torch.float32,device='cuda:0')
-    BCMV = lightning_attn2(Q,K,V)
-    print(torch.norm(BCMV),torch.norm(correct_BCMV),torch.norm(BCMV-correct_BCMV))

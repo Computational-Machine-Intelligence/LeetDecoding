@@ -9,7 +9,6 @@ from methods.Recursion import recursion
 from methods.FleetAttention import FleetAttention
 from methods.linear_attn import linear_attn, _build_slope_tensor
 import argparse
-from icecream import ic
 import torch.utils.benchmark as benchmark
 
 
@@ -164,7 +163,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch',help='The batch size of the test, the default is 1',default=1)
     parser.add_argument('--n',help='The sequence length of the test, the default is 8192',default=8192)
-    parser.add_argument('--method', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention, BCMV_vanilla, rowbased, recursion, blockbased, pytorch_FleetAttention.')
+    parser.add_argument('--method', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention, BCMV_vanilla, rowbased, recursion, blockbased, causal_dot_product.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, the default is float16.',default='float16')
     parser.add_argument('--gpu',help='gpu number, default is 0.',default='0')
     parser.add_argument('--is_weight_decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
