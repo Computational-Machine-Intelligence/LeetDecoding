@@ -793,7 +793,7 @@ void causal_dot_product(const torch::Tensor queries,
 {
   #ifdef ENABLE_NVIDIA_OPTIMIZATIONS
   int fallback = nvidia::lmha_fwd(queries, keys, values, gamma, product);
-  printf("fallback:%d\n",fallback);
+  // printf("fallback:%d\n",fallback);
   #else
     int fallback = 1;
   #endif

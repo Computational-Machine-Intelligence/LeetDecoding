@@ -1,6 +1,6 @@
 import torch
-from methods.linear_attn import get_full_mask,linear_attn
-from methods.FleetAttention import FleetAttention
+from ..methods.linear_attn import get_full_mask,linear_attn
+from ..methods.FleetAttention import FleetAttention
 
 
 """

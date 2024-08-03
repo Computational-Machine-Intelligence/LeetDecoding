@@ -1,13 +1,13 @@
 import torch
 import time
 import math
-from methods.causal_dot_product import causal_dot_product
-from methods.RowBased import rowBased
-from methods.lightningAttention2 import lightning_attn2
-from methods.BlockBased import blockBased
-from methods.Recursion import recursion
-from methods.FleetAttention import FleetAttention
-from methods.linear_attn import linear_attn, _build_slope_tensor
+from ..methods.causal_dot_product import causal_dot_product
+from ..methods.RowBased import rowBased
+from ..methods.lightningAttention2 import lightning_attn2
+from ..methods.BlockBased import blockBased
+from ..methods.Recursion import recursion
+from ..methods.FleetAttention import FleetAttention
+from ..methods.linear_attn import linear_attn, _build_slope_tensor
 import argparse
 import torch.utils.benchmark as benchmark
 

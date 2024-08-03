@@ -2,7 +2,7 @@ import torch
 from torch.utils.cpp_extension import load
 import os
 import time
-from methods.FleetAttention import FleetAttention
+
 
 current_file_path = os.path.abspath(__file__)
 current_file_dir = os.path.dirname(current_file_path)
@@ -13,8 +13,8 @@ cuda_module_causal_dot_product_filePath = os.path.join(current_file_dir,'causal_
 
 
 # load cuda module
-cuda_module_with_decay_fp32 = load(name="FleetAttention_fp32_cuda",sources=cuda_module_with_decay_fp32_filePath,verbose=False)
-cuda_module_with_decay_fp16 = load(name="FleetAttention_fp16_cuda",sources=cuda_module_with_decay_fp16_filePath,verbose=False)
+cuda_module_with_decay_fp32 = load(name="causal_product_cuda_with_decay_fp32_cuda",sources=cuda_module_with_decay_fp32_filePath,verbose=False)
+cuda_module_with_decay_fp16 = load(name="causal_product_cuda_with_decay_fp16_cuda",sources=cuda_module_with_decay_fp16_filePath,verbose=False)
 cuda_module_causal_dot_product = load(name='causal_dot_product_cuda',sources=cuda_module_causal_dot_product_filePath,verbose=False)
 
 
@@ -51,7 +51,7 @@ class CausalDorProduct(torch.autograd.Function):
                 print('dtype not supported')
         else:
             if dtype == torch.float32:
-                cuda_module_with_decay_fp32.FleetAttention(
+                cuda_module_with_decay_fp32.causal_dot_product(
                     Q.data,
                     K.data,
                     V.data,
@@ -59,7 +59,7 @@ class CausalDorProduct(torch.autograd.Function):
                     product
                 )
             elif dtype == torch.float16:
-                cuda_module_with_decay_fp16.FleetAttention(
+                cuda_module_with_decay_fp16.causal_dot_product(
                     Q.data,
                     K.data,
                     V.data,

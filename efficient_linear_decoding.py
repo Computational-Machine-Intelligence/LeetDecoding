@@ -1,5 +1,5 @@
-from methods.lightningAttention2 import lightning_attn2
-from methods.causal_dot_product import causal_dot_product
+from .methods.lightningAttention2 import lightning_attn2
+from .methods.causal_dot_product import causal_dot_product
 import torch
 import pynvml
 
@@ -56,9 +56,9 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
 
 
 if __name__=='__main__':
-    Q = torch.randn(2,32,1024,128,dtype=torch.float16,device='cuda:0')
-    K = torch.randn(2,32,1024,128,dtype=torch.float16,device='cuda:0')
-    V = torch.randn(2,32,1024,128,dtype=torch.float16,device='cuda:0')
+    Q = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
+    K = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
+    V = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
     ans = causal_linear_decoder(Q,K,V)
     correct_ans = torch.matmul(torch.tril(torch.matmul(Q,K.transpose(2,3))) ,V)
-    print(torch.norm(ans),torch.norm(correct_ans-ans),torch.norm(correct_ans))
+    print('ours norm:',torch.norm(ans),'\ncorrect norm:',torch.norm(correct_ans),'\ndifference norm:',torch.norm(correct_ans-ans))

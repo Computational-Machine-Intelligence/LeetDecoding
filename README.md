@@ -2,23 +2,32 @@
 
 ### 1. installation
 
-#### 1.1 Source Code Install
 ```bash
 conda create -n efficient_linear_decoding python=3.9
 conda activate efficient_linear_decoding
-pip install requirements.txt
+pip install efficient_linear_decoding
 ```
 
-#### 1.2 pip Install
-```bash
-pip install efficient_linear_decoding
+The code has been test under the following environment:
+```python
+triton>=2.1.0
+torch>=2.1.0
+pycuda
+pynvml
+```
+You can use the following command to install:
+```python
+pip install triton==2.1.0
+pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install pycuda
+pip install pynvml
 ```
 
 ### 2. usage
 
 ```python
 import torch
-from efficient_linear_decoding import causal_linear_decoder
+from efficient_linear_decoding.efficient_linear_decoding import causal_linear_decoder
 
 # Create input tensor
 Q = torch.randn(2,32,1024,128,device='cuda:0')

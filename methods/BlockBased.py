@@ -1,7 +1,7 @@
 import torch
 import math
-from methods.linear_attn import get_full_mask
-from methods.FleetAttention import FleetAttention
+from ..methods.linear_attn import get_full_mask
+from ..methods.FleetAttention import FleetAttention
 
 
 BLOCKM_BlockBased = 4 # Number of block rows
