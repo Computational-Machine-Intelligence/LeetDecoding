@@ -14,6 +14,7 @@ triton>=2.1.0
 torch>=2.1.0
 pycuda
 pynvml
+numpy
 ```
 You can use the following command to install:
 ```python
@@ -21,6 +22,7 @@ pip install triton==2.1.0
 pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
 pip install pycuda
 pip install pynvml
+pip install numpy
 ```
 
 ### 2. usage
