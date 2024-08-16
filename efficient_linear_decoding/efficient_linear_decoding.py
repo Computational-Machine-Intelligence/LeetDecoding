@@ -1,7 +1,8 @@
-from .methods.lightningAttention2 import lightning_attn2
-from .methods.causal_dot_product import causal_dot_product
+from efficient_linear_decoding.methods.lightningAttention2 import lightning_attn2, GPU_MAP
+from efficient_linear_decoding.methods.causal_dot_product import causal_dot_product
 import torch
 import pynvml
+import pycuda.driver as drv
 
 
 DTYPE_MAP = {
@@ -41,13 +42,16 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
     if 2 * batch_size * heads * seqlen * rank * DTYPE_MAP[type] + batch_size * heads * seqlen * dim * DTYPE_MAP[type] > gpu_memory_free:
         raise Exception("GPU memory is not enough, please use smaller data.")
     if type == torch.float16:
-        ans = lightning_attn2(q,k,v,gamma)
+        if seqlen > GPU_MAP[drv.Device(0).name()]: # sequence length must be larger than the lightningAttention block size
+            ans = lightning_attn2(q,k,v,gamma)
+        else:
+            ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
     elif type == torch.float32:
         if batch_size > 1 and seqlen>=1024: 
             if gamma is None:
                 ans = causal_dot_product(q,k,v)
             else:
-                ans = causal_dot_product(q,k,v,torch.exp(gamma))
+                ans = causal_dot_product(q,k,v,torch.exp(-gamma))
         else:
             ans = lightning_attn2(q,k,v,gamma)
     else:
@@ -56,9 +60,10 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
 
 
 if __name__=='__main__':
-    Q = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
-    K = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
-    V = torch.randn(2,32,1024,128,dtype=torch.float32,device='cuda:0')
-    ans = causal_linear_decoder(Q,K,V)
+    Q = torch.randn(1,32,1024,128,dtype=torch.float16,device='cuda:0')
+    K = torch.randn(1,32,1024,128,dtype=torch.float16,device='cuda:0')
+    V = torch.randn(1,32,1024,128,dtype=torch.float16,device='cuda:0')
+    gamma = torch.randn((32,),dtype=torch.float16,device='cuda:0')
+    ans = causal_linear_decoder(Q,K,V,gamma=gamma,is_mask_weight=True)
     correct_ans = torch.matmul(torch.tril(torch.matmul(Q,K.transpose(2,3))) ,V)
     print('ours norm:',torch.norm(ans),'\ncorrect norm:',torch.norm(correct_ans),'\ndifference norm:',torch.norm(correct_ans-ans))

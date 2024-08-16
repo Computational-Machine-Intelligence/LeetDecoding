@@ -1,7 +1,7 @@
 import torch
 import math
-from ..methods.linear_attn import get_full_mask
-from ..methods.FleetAttention import FleetAttention
+from efficient_linear_decoding.methods.linear_attn import get_full_mask
+from efficient_linear_decoding.methods.FleetAttention import FleetAttention
 
 
 BLOCKM_BlockBased = 4 # Number of block rows
@@ -74,7 +74,7 @@ class BlockBased(torch.autograd.Function):
                 B_block = Q[:,:,pbegin:pend,:]
                 C_block = K[:,:,pbegin:pend,:]
                 V_block = V[:,:,pbegin:pend,:]
-                l = pytorch_FleetAttention(B_block,C_block,V_block)
+                l = FleetAttention(B_block,C_block,V_block)
                 o = l + torch.einsum('...mk,...kd->...md',B_block,u)
                 u += torch.einsum('...mk,...md->...kd',C_block,V_block)
                 ans[:,:,pbegin:pend,:] = o

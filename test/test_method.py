@@ -165,7 +165,7 @@ if __name__=='__main__':
     parser.add_argument('--n',help='The sequence length of the test, the default is 8192',default=8192)
     parser.add_argument('--method', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention, BCMV_vanilla, rowbased, recursion, blockbased, causal_dot_product.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, the default is float16.',default='float16')
-    parser.add_argument('--gpu',help='gpu number, default is 0.',default='0')
+    parser.add_argument('--gpu',type=int,help='gpu number, default is 0.',default=0)
     parser.add_argument('--is_weight_decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
     parser.add_argument('--onlyMethod',action='store_true',help='Whether to test only methods and not vanilla. If enabled, only methods are tested. If disabled, other methods are tested.') 
     args = parser.parse_args()
@@ -177,13 +177,13 @@ if __name__=='__main__':
         type = torch.float32
     else:
         pass
-    gpu = "cuda:"+args.gpu
+    gpu = "cuda:"+str(args.gpu)
     torch.cuda.set_device(gpu)
     device = torch.device(gpu)
     
     func = None 
     if args.method=='FleetAttention':
-        func = fleetAttention
+        func = FleetAttention
     elif args.method=='lightningAttention':
         func = lightning_attn2
     elif args.method=='rowbased':
@@ -198,5 +198,4 @@ if __name__=='__main__':
         func = causal_dot_product
     else:
         raise Exception("Unimplemented Method Name.")
-    print('fixed value.')
-    test_BCMV_by_fixed_value(args.onlyMethod,b,h,n,r,d,func,type,device)
+    test_BCMV_by_random(args.onlyMethod,b,h,n,r,d,func,type,gpu,args.is_weight_decay)

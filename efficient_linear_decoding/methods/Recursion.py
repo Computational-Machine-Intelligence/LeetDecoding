@@ -1,6 +1,6 @@
 import torch
-from ..methods.linear_attn import get_full_mask,linear_attn
-from ..methods.FleetAttention import FleetAttention
+from efficient_linear_decoding.methods.linear_attn import get_full_mask,linear_attn
+from efficient_linear_decoding.methods.FleetAttention import FleetAttention
 
 
 """
@@ -29,7 +29,7 @@ def recursive_infer_with_decay(B,C,V,left,right,gamma):
 
 def recursive_infer(B,C,V,left,right,min_seq_len:32):
     if (right-left)<=min_seq_len:
-        out = pytorch_FleetAttention(B[:,:,left:right,:], C[:,:,left:right,:], V[:,:,left:right,:])
+        out = FleetAttention(B[:,:,left:right,:], C[:,:,left:right,:], V[:,:,left:right,:])
         return out
     else:
         mid = (left+right)//2

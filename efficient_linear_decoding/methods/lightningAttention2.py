@@ -10,6 +10,7 @@ GPU_MAP = {
     "NVIDIA RTX A6000": 32, 
     "NVIDIA A100-PCIE-40GB": 128, 
     'NVIDIA A100 80GB PCIe': 128, 
+    'NVIDIA A800-SXM4-80GB': 128,
 }
 
 # Compute the causal linear attention of the ordinary mask
@@ -221,4 +222,15 @@ class LightningAttention2(torch.autograd.Function):
         return o
     
 lightning_attn2 = LightningAttention2.apply
+
+
+if __name__=='__main__':
+    dtype = torch.float16
+    Q = torch.randn(2,32,129,128,dtype=dtype,device='cuda:0')
+    K = torch.randn(2,32,129,128,dtype=dtype,device='cuda:0')
+    V = torch.randn(2,32,129,128,dtype=dtype,device='cuda:0')
+    gamma = torch.full((32,),0.9,device='cuda:0',dtype=dtype)
+    ans =lightning_attn2(Q,K,V,gamma)
+    correct_ans = torch.matmul(torch.tril(torch.matmul(Q,K.transpose(2,3))) ,V)
+    print('ours norm:',torch.norm(ans),'\ncorrect norm:',torch.norm(correct_ans),'\ndifference norm:',torch.norm(correct_ans-ans))
 

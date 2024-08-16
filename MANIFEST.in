@@ -1,5 +1,8 @@
 include requirements.txt
-graft methods
-include efficient_linear_decoding.py
+graft efficient_linear_decoding/methods
+include efficient_linear_decoding/efficient_linear_decoding.py
 prune test
 prune setup.py
+include efficient_linear_decoding/methods/causal_product_cuda_with_decay_fp16.cu
+include efficient_linear_decoding/methods/causal_product_cuda_with_decay_fp32.cu
+include efficient_linear_decoding/methods/causal_product_cuda.cu
