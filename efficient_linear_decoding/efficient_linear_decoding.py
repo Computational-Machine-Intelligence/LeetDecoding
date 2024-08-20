@@ -20,7 +20,7 @@ def get_gpu_memory(gpu_idx):
     return mem_info.total,mem_info.free
 
 
-def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
+def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=True):
     """_summary_
 
     Args:
@@ -29,6 +29,7 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
         v (tensor): The shape of v is (batch_size, heads, seqlen, dim)
         is_mask_weight (bool): Whether to use the mask weight, False uses the normal causal mask, True uses a mask with weight decay.
         gamma (tensor): The shape of gamma is (heads). The scaling factor for the attention weights.
+        is_need_exp: To obtain the weights for the mask, whether we need to apply the operation exp(-gamma) to the gamma parameter.
     """
     batch_size, heads, seqlen, rank= q.shape
     dim = v.shape[-1]
@@ -41,21 +42,27 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None):
     gpu_memory, gpu_memory_free = get_gpu_memory(device.index)
     if 2 * batch_size * heads * seqlen * rank * DTYPE_MAP[type] + batch_size * heads * seqlen * dim * DTYPE_MAP[type] > gpu_memory_free:
         raise Exception("GPU memory is not enough, please use smaller data.")
-    if type == torch.float16:
-        if seqlen > GPU_MAP[drv.Device(0).name()]: # sequence length must be larger than the lightningAttention block size
-            ans = lightning_attn2(q,k,v,gamma)
+    if gamma is not None and not is_need_exp:
+        if type==torch.float32:
+            ans = causal_dot_product(q,k,v,gamma)
         else:
-            ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
-    elif type == torch.float32:
-        if batch_size > 1 and seqlen>=1024: 
-            if gamma is None:
-                ans = causal_dot_product(q,k,v)
-            else:
-                ans = causal_dot_product(q,k,v,torch.exp(-gamma))
-        else:
-            ans = lightning_attn2(q,k,v,gamma)
+            ans = causal_dot_product(q.to(torch.float32),k.to(torch.float32),v.to(torch.float32),gamma.to(torch.float32)).to(type)
     else:
-        raise Exception('Not implement the type',type)
+        if type == torch.float16:
+            if seqlen > GPU_MAP[drv.Device(0).name()]: # sequence length must be larger than the lightningAttention block size
+                ans = lightning_attn2(q,k,v,gamma)
+            else:
+                ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
+        elif type == torch.float32:
+            if batch_size > 1 and seqlen>=1024: 
+                if gamma is None:
+                    ans = causal_dot_product(q,k,v)
+                else:
+                    ans = causal_dot_product(q,k,v,torch.exp(-gamma))
+            else:
+                ans = lightning_attn2(q,k,v,gamma)
+        else:
+            raise Exception('Not implement the type',type)
     return ans
 
 

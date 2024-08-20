@@ -18,7 +18,7 @@ cuda_module_with_decay_fp16 = load(name="causal_product_cuda_with_decay_fp16_cud
 cuda_module_causal_dot_product = load(name='causal_dot_product_cuda',sources=cuda_module_causal_dot_product_filePath,verbose=False)
 
 
-class CausalDorProduct(torch.autograd.Function):
+class CausalDotProduct(torch.autograd.Function):
     """Compute the weighted sum of values but attending only to previous
     values."""
 
@@ -71,7 +71,7 @@ class CausalDorProduct(torch.autograd.Function):
         return product
 
 
-causal_dot_product = CausalDorProduct.apply
+causal_dot_product = CausalDotProduct.apply
 
 
 if __name__=='__main__':

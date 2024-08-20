@@ -5,7 +5,7 @@ with open("README.md",'r',encoding='utf-8') as f:
 
 setuptools.setup(
     name="efficient_linear_decoding",
-    version = "0.0.4",
+    version = "0.0.5",
     keywords = ["pip", "efficient_linear_decoding"],
     description = "Efficient computation library for linear attention.",
     long_description=long_description,
