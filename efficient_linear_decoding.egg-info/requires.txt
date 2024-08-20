@@ -1,3 +1,0 @@
-pycuda
-triton==2.1.0
-pynvml
