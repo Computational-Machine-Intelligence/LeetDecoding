@@ -1,6 +1,6 @@
 /build/
 /dist/
-/efficient_linear_decoding.egg-info/
+/leetDecoding.egg-info/
 .pypic
 .DS_Store
 /test/

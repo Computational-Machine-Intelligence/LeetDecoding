@@ -3,6 +3,15 @@ from leetDecoding.methods.causal_dot_product import causal_dot_product
 import torch
 import pynvml
 import pycuda.driver as drv
+from leetDecoding.methods.linear_attn import linear_attn
+from leetDecoding.methods.causal_dot_product import causal_dot_product
+from leetDecoding.methods.causal_dot_product_torch import causal_dot_product_torch
+from leetDecoding.methods.BlockBased import blockBased
+from leetDecoding.methods.Recursion import recursion
+from leetDecoding.methods.lightningAttention2 import lightning_attn2
+from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_torch
+from leetDecoding.methods.FleetAttention import FleetAttention
+from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
 
 
 DTYPE_MAP = {
@@ -11,6 +20,17 @@ DTYPE_MAP = {
     torch.float32: 4
 }
 
+ATTENTION_MAP = {
+    "vanilla":linear_attn,
+    'lightningAttention2':lightning_attn2,
+    'lightningAttention2_torch':lightningAttention2_torch,
+    'FleetAttention_torch':FleetAttention,
+    'FleetAttention':FleetAttention_triton,
+    'causal_dot_product':causal_dot_product,
+    'causal_dot_product_torch':causal_dot_product_torch,
+    'recursion':recursion,
+    "block-based":blockBased,
+}
 
 def get_gpu_memory(gpu_idx):
     pynvml.nvmlInit()
@@ -20,7 +40,7 @@ def get_gpu_memory(gpu_idx):
     return mem_info.total,mem_info.free
 
 
-def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=True):
+def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=True,attn_method=None):
     """_summary_
 
     Args:
@@ -44,23 +64,51 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=Tru
         raise Exception("GPU memory is not enough, please use smaller data.")
     if gamma is not None and not is_need_exp:
         if type==torch.float32:
-            ans = causal_dot_product(q,k,v,gamma)
+            if attn_method is not None:
+                attention_method = ATTENTION_MAP[attn_method]
+                ans = attention_method(q,k,v,gamma)
+            else:
+                ans = causal_dot_product(q,k,v,gamma)
         else:
-            ans = causal_dot_product(q.to(torch.float32),k.to(torch.float32),v.to(torch.float32),gamma.to(torch.float32)).to(type)
+            if attn_method is not None:
+                attention_method = ATTENTION_MAP[attn_method]
+                ans = attention_method(q,k,v,gamma)
+            else:
+                ans = causal_dot_product(q.to(torch.float32),k.to(torch.float32),v.to(torch.float32),gamma.to(torch.float32)).to(type)
     else:
         if type == torch.float16:
             if seqlen > GPU_MAP[drv.Device(0).name()]: # sequence length must be larger than the lightningAttention block size
-                ans = lightning_attn2(q,k,v,gamma)
+                if attn_method is not None:
+                    attention_method = ATTENTION_MAP[attn_method]
+                    ans = attention_method(q,k,v,gamma)
+                else:
+                    ans = lightning_attn2(q,k,v,gamma)
             else:
-                ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
+                if attn_method is not None:
+                    attention_method = ATTENTION_MAP[attn_method]
+                    ans = attention_method(q,k,v,gamma if gamma is None else torch.exp(-gamma))
+                else:
+                    ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
         elif type == torch.float32:
             if batch_size > 1 and seqlen>=1024: 
                 if gamma is None:
-                    ans = causal_dot_product(q,k,v)
+                    if attn_method is not None:
+                        attention_method = ATTENTION_MAP[attn_method]
+                        ans = attention_method(q,k,v)
+                    else:
+                        ans = causal_dot_product(q,k,v)
                 else:
-                    ans = causal_dot_product(q,k,v,torch.exp(-gamma))
+                    if attn_method is not None:
+                        attention_method = ATTENTION_MAP[attn_method]
+                        ans = attention_method(q,k,v,torch.exp(-gamma))
+                    else:
+                        ans = causal_dot_product(q,k,v,torch.exp(-gamma))
             else:
-                ans = lightning_attn2(q,k,v,gamma)
+                if attn_method is not None:
+                    attention_method = ATTENTION_MAP[attn_method]
+                    ans = attention_method(q,k,v,gamma)
+                else:
+                    ans = lightning_attn2(q,k,v,gamma)
         else:
             raise Exception('Not implement the type',type)
     return ans
