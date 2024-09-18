@@ -31,6 +31,8 @@ pip install numpy
 import torch
 from leetDecoding.efficient_linear_decoding import causal_linear_decoder
 
+torch.cuda.set_device('cuda:0')
+
 # Create input tensor
 Q = torch.randn(2,32,1024,128,device='cuda:0')
 K = torch.randn(2,32,1024,128,device='cuda:0')
