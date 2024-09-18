@@ -5,7 +5,7 @@ with open("README.md",'r',encoding='utf-8') as f:
 
 setuptools.setup(
     name="leetDecoding",
-    version = "0.0.1",
+    version = "0.0.2",
     keywords = ["pip", "leetDecoding","LeetDecoding","efficient_linear_decoding"],
     description = "Efficient computation library for linear attention.",
     long_description=long_description,
