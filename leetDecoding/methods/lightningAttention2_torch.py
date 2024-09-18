@@ -71,6 +71,3 @@ def lightningAttention2_torch(q,k,v,gamma=None):
             output[:, :, si:ei] = o_inter + o_intra
             kv = kv + torch.matmul(ki[:, -m:].transpose(-1, -2).to(vi.dtype), vi)
     return output
-
-
-    

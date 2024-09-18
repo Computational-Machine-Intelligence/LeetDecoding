@@ -72,14 +72,3 @@ class CausalDotProduct(torch.autograd.Function):
 
 
 causal_dot_product = CausalDotProduct.apply
-
-
-if __name__=='__main__':
-    device='cuda:0'
-    dtype=torch.float32
-    Q = torch.randn(2,10,100,128,device=device,dtype=dtype)
-    K = torch.randn(2,10,100,128,device=device,dtype=dtype)
-    V = torch.randn(2,10,100,128,device=device,dtype=dtype)
-    gamma = torch.full((32,),0.9,device='cuda:0',dtype=dtype)
-    causal_dot_product(Q,K,V,gamma)
-    

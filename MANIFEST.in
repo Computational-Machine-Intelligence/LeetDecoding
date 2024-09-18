@@ -1,8 +1,8 @@
 include requirements.txt
-graft efficient_linear_decoding/methods
-include efficient_linear_decoding/efficient_linear_decoding.py
+graft leetDecoding/methods
+include leetDecoding/efficient_linear_decoding.py
 prune test
 prune setup.py
-include efficient_linear_decoding/methods/causal_product_cuda_with_decay_fp16.cu
-include efficient_linear_decoding/methods/causal_product_cuda_with_decay_fp32.cu
-include efficient_linear_decoding/methods/causal_product_cuda.cu
+include leetDecoding/methods/causal_product_cuda_with_decay_fp16.cu
+include leetDecoding/methods/causal_product_cuda_with_decay_fp32.cu
+include leetDecoding/methods/causal_product_cuda.cu

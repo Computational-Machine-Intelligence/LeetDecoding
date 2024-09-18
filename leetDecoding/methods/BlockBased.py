@@ -1,10 +1,10 @@
 import torch
 import math
-from efficient_linear_decoding.methods.linear_attn import get_full_mask
-from efficient_linear_decoding.methods.FleetAttention import FleetAttention
+from leetDecoding.methods.linear_attn import get_full_mask
+from leetDecoding.methods.causal_dot_product import causal_dot_product
 
 
-BLOCKM_BlockBased = 4 # Number of block rows
+BLOCKM_BlockBased = 32 # Number of block rows
 """
 python test/test_method.py --n 20 --type float32 --method blockbased --gpu 2  
 """
@@ -38,7 +38,8 @@ class BlockBased(torch.autograd.Function):
                 o = l + torch.einsum('...mk,...kd->...md',tmp2,u)
                 
                 tmp3 = C_block * w2
-                u = torch.einsum('bhrd,h->bhrd', u, cons) + torch.einsum('...mk,...md->...kd', tmp3, V_block)
+                # print('u.shape:',u.shape,'cons.shape:',cons.shape,'tmp3.shape:',tmp3.shape,'V_block.shape:',V_block.shape)
+                u = torch.einsum('bhrd,h->bhrd', u, cons.squeeze(-1).squeeze(-1)) + torch.einsum('...mk,...md->...kd', tmp3, V_block)
                 ans[:,:,pbegin:pend,:] = o
             if seq%BLOCKM:
                 pbegin = num_block * BLOCKM
@@ -58,7 +59,7 @@ class BlockBased(torch.autograd.Function):
                 o = l + torch.einsum('...mk,...kd->...md',tmp2,u)
                 
                 tmp3 = C_block * w2
-                u = torch.einsum('bhrd,h->bhrd', u, cons) + torch.einsum('...mk,...md->...kd', tmp3, V_block)
+                u = torch.einsum('bhrd,h->bhrd', u, cons.squeeze(-1).squeeze(-1)) + torch.einsum('...mk,...md->...kd', tmp3, V_block)
             
                 ans[:,:,pbegin:seq,:] = o
         else:
@@ -74,7 +75,7 @@ class BlockBased(torch.autograd.Function):
                 B_block = Q[:,:,pbegin:pend,:]
                 C_block = K[:,:,pbegin:pend,:]
                 V_block = V[:,:,pbegin:pend,:]
-                l = FleetAttention(B_block,C_block,V_block)
+                l = causal_dot_product(B_block,C_block,V_block)
                 o = l + torch.einsum('...mk,...kd->...md',B_block,u)
                 u += torch.einsum('...mk,...md->...kd',C_block,V_block)
                 ans[:,:,pbegin:pend,:] = o

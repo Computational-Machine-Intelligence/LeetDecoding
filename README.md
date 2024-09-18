@@ -3,9 +3,9 @@
 ### 1. installation
 
 ```bash
-conda create -n efficient_linear_decoding python=3.9
-conda activate efficient_linear_decoding
-pip install efficient_linear_decoding
+conda create -n leetDecoding python==3.9
+conda activate leetDecoding
+pip install leetDecoding
 ```
 
 The code has been test under the following environment:
@@ -29,7 +29,7 @@ pip install numpy
 
 ```python
 import torch
-from efficient_linear_decoding.efficient_linear_decoding import causal_linear_decoder
+from leetDecoding.efficient_linear_decoding import causal_linear_decoder
 
 # Create input tensor
 Q = torch.randn(2,32,1024,128,device='cuda:0')
@@ -39,10 +39,13 @@ V = torch.randn(2,32,1024,128,device='cuda:0')
 # Inference using causal_linear_decoder
 output = causal_linear_decoder(Q,K,V)
 
-# If you want to input a mask with weight, set the is_mask_weight: True
+# If you want to input a mask with weight that values are exp(-gamma), set the is_mask_weight: True and is_need_exp:True
 gamma = torch.full((32,),0.5,device='cuda:0')
-output = causal_linear_decoder(Q,K,V,is_mask_weight=True,gamma=gamma)
+output = causal_linear_decoder(Q,K,V,is_mask_weight=True,gamma=gamma,is_need_exp=True)
 
+# If you just want to input a mask with weight, set the is_mask_weight: True and is_need_exp:False
+gamma = torch.full((32,),0.5,device='cuda:0')
+output = causal_linear_decoder(Q,K,V,is_mask_weight=True,gamma=gamma,is_need_exp=False)
 ```
 
 

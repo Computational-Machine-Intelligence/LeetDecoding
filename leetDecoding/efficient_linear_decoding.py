@@ -1,5 +1,5 @@
-from efficient_linear_decoding.methods.lightningAttention2 import lightning_attn2, GPU_MAP
-from efficient_linear_decoding.methods.causal_dot_product import causal_dot_product
+from leetDecoding.methods.lightningAttention2 import lightning_attn2, GPU_MAP
+from leetDecoding.methods.causal_dot_product import causal_dot_product
 import torch
 import pynvml
 import pycuda.driver as drv

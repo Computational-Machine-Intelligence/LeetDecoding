@@ -1,17 +1,17 @@
 import torch
-from efficient_linear_decoding.methods.linear_attn import get_full_mask,linear_attn
-from efficient_linear_decoding.methods.FleetAttention import FleetAttention
-
+from leetDecoding.methods.linear_attn import get_full_mask,linear_attn
+from leetDecoding.methods.causal_dot_product import causal_dot_product
+import pdb
 
 """
 python test/test_method.py --n 20 --type float32 --method recursion --gpu 2  
 """
 
-BLOCKM = 4 # Number of block rows
+# BLOCKM = 32 # Number of block rows
 
 
-def recursive_infer_with_decay(B,C,V,left,right,gamma):
-    if (right-left)<=BLOCKM:
+def recursive_infer_with_decay(B,C,V,left,right,gamma, min_seq_len=4):
+    if (right-left)<=min_seq_len:
         mask = get_full_mask(right-left, gamma).to(V.device).to(V.dtype)
         out = torch.matmul(torch.einsum("...am,...bm->...ab",B[:,:,left:right,:],C[:,:,left:right,:])*mask, V[:,:,left:right,:])
         return out
@@ -29,7 +29,7 @@ def recursive_infer_with_decay(B,C,V,left,right,gamma):
 
 def recursive_infer(B,C,V,left,right,min_seq_len:32):
     if (right-left)<=min_seq_len:
-        out = FleetAttention(B[:,:,left:right,:], C[:,:,left:right,:], V[:,:,left:right,:])
+        out = causal_dot_product(B[:,:,left:right,:], C[:,:,left:right,:], V[:,:,left:right,:])
         return out
     else:
         mid = (left+right)//2
@@ -47,9 +47,9 @@ class Recursion(torch.autograd.Function):
         b,h,n,r = Q.shape
         d = V.shape[-1]
         if gamma is not None:
-            ans = recursive_infer_with_decay(Q,K,V,0,n,gamma)
+            ans = recursive_infer_with_decay(Q,K,V,0,n,gamma,32)
         else:
-            ans = recursive_infer(Q,K,V,0,n,BLOCKM)
+            ans = recursive_infer(Q,K,V,0,n,32)
         return ans
 
 

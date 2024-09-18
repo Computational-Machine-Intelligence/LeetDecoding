@@ -4,9 +4,9 @@ with open("README.md",'r',encoding='utf-8') as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="efficient_linear_decoding",
-    version = "0.0.7",
-    keywords = ["pip", "efficient_linear_decoding"],
+    name="leetDecoding",
+    version = "0.0.1",
+    keywords = ["pip", "leetDecoding","LeetDecoding","efficient_linear_decoding"],
     description = "Efficient computation library for linear attention.",
     long_description=long_description,
     long_description_content_type="text/markdown",
