@@ -46,6 +46,11 @@ output = causal_linear_decoder(Q,K,V,is_mask_weight=True,gamma=gamma,is_need_exp
 # If you just want to input a mask with weight, set the is_mask_weight: True and is_need_exp:False
 gamma = torch.full((32,),0.5,device='cuda:0')
 output = causal_linear_decoder(Q,K,V,is_mask_weight=True,gamma=gamma,is_need_exp=False)
+
+# If you want to use a specified methods, such as FleetAttention, set the attn-method: 'FleetAttention'
+gamma = torch.full((32,),0.5,device='cuda:0')
+output = causal_linear_decoder(Q,K,V,is_mask_weight=False,attn_method='FleetAttention')
+
 ```
 
 
