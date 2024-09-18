@@ -2,14 +2,17 @@ import torch
 import time
 import math
 from efficient_linear_decoding.methods.causal_dot_product import causal_dot_product
-from efficient_linear_decoding.methods.RowBased import rowBased
+from efficient_linear_decoding.methods.causal_dot_product_torch import causal_dot_product_torch
 from efficient_linear_decoding.methods.lightningAttention2 import lightning_attn2
 from efficient_linear_decoding.methods.BlockBased import blockBased
 from efficient_linear_decoding.methods.Recursion import recursion
 from efficient_linear_decoding.methods.FleetAttention import FleetAttention
+from efficient_linear_decoding.methods.lightningAttention2_torch import lightningAttention2_torch
 from efficient_linear_decoding.methods.linear_attn import linear_attn, _build_slope_tensor
 import argparse
 import torch.utils.benchmark as benchmark
+import os
+import json
 
 
 # Analyze the performance of the forward function
@@ -26,8 +29,8 @@ def benchmark_forward(
         amp_dtype: The AMP data type.
         kwinputs: Additional keyword arguments to pass to the function.
     """
-    if verbose:
-        print(desc, "- Forward pass")
+    # if verbose:
+    #     print(desc, "- Forward pass")
 
     def amp_wrapper(*inputs, **kwinputs):
         with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp):
@@ -38,9 +41,9 @@ def benchmark_forward(
         num_threads=torch.get_num_threads(),
     )
     m = t.timeit(repeats)
-    if verbose:
-        print(m)
-    return t, m
+    # if verbose:
+    #     print(m.times[0])
+    return t, m.times[0]
 
 
 # Detailed analysis of the time of each part (operator)
@@ -121,33 +124,48 @@ def benchmark_memory(fn, *inputs, desc="", verbose=True, **kwinputs):
     fn(*inputs, **kwinputs)
     torch.cuda.synchronize()
     mem = torch.cuda.max_memory_allocated() / ((2**20) * 1000)
-    if verbose:
-        print(f"{desc} max memory: {mem}GB")
+    # if verbose:
+    #     print(f"{desc} max memory: {mem}GB")
     torch.cuda.empty_cache()
     return mem
     
     
-def test_BCMV_by_random(onlyMethod,b,h,n,r,d,method,type,device,is_weight_decay):
+def test_BCMV_by_random(onlyMethod,b,h,n,r,d,method,type,device,is_weight_decay,output_path,turns):
     B = torch.randn(b,h,n,r,dtype=type,device=device)
     C = torch.randn(b,h,n,r,dtype=type,device=device)
     V = torch.randn(b,h,n,d,dtype=type,device=device)
     if is_weight_decay:
         s = _build_slope_tensor(h).to(dtype=type,device=device).reshape(h)
     if onlyMethod:
-        if is_weight_decay:
-            if method !=lightning_attn2 and method != recursion and method!=blockBased:
-                benchmark_forward(method,B,C,V,torch.exp(-s),verbose=True)
-                benchmark_memory(method,B,C,V,torch.exp(-s),verbose=True)
+        res = {}
+        for i in range(turns):
+            if is_weight_decay:
+                if method !=lightning_attn2 and method != recursion and method!=blockBased and method !=lightningAttention2_torch:
+                    _,t = benchmark_forward(method,B,C,V,torch.exp(-s),verbose=True)
+                    benchmark_memory(method,B,C,V,torch.exp(-s),verbose=True)
+                else:
+                    _,t = benchmark_forward(method,B,C,V,s,verbose=True)
+                    benchmark_memory(method,B,C,V,s,verbose=True)
             else:
-                benchmark_forward(method,B,C,V,s,verbose=True)
-                benchmark_memory(method,B,C,V,s,verbose=True)
-        else:
-            benchmark_forward(method,B,C,V,verbose=True)
-            benchmark_memory(method,B,C,V,verbose=True)
+                _,t = benchmark_forward(method,B,C,V,verbose=True)
+                benchmark_memory(method,B,C,V,verbose=True)
+            res[i] = t
+        # compute avg and variance
+        times = list(res.values())
+        mean = sum(times) / len(times)
+        variance = sum((x - mean) ** 2 for x in times) / len(times)
+        max_time = max(times)
+        min_time = min(times)
+        res['avg']=mean
+        res['variance']=variance
+        res['upper_bound']=max_time-mean
+        res['lower_bound']=-min_time
+        with open(os.path.join(output_path),'w') as f:
+            json.dump(res,f,ensure_ascii=False)                
     else:
         if is_weight_decay:
             correct_BCMV = linear_attn(B,C,V,s)
-            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased:
+            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch:
                 BCMV = method(B,C,V,torch.exp(-s))
             else:
                 BCMV = method(B,C,V,s)
@@ -163,11 +181,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch',help='The batch size of the test, the default is 1',default=1)
     parser.add_argument('--n',help='The sequence length of the test, the default is 8192',default=8192)
-    parser.add_argument('--method', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention, BCMV_vanilla, rowbased, recursion, blockbased, causal_dot_product.')
+    parser.add_argument('--method', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention2, BCMV_vanilla, causal_dot_product_torch, recursion, blockbased, causal_dot_product,lightningAttention2_torch.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, the default is float16.',default='float16')
     parser.add_argument('--gpu',type=int,help='gpu number, default is 0.',default=0)
     parser.add_argument('--is_weight_decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
     parser.add_argument('--onlyMethod',action='store_true',help='Whether to test only methods and not vanilla. If enabled, only methods are tested. If disabled, other methods are tested.') 
+    parser.add_argument('--output_dir',type=str,default='/mnt/wjp/experiment_MMLU/output/single_layer')
+    parser.add_argument('--turns',type=int,default=15)
     args = parser.parse_args()
     
     b,h,n,r,d =int(args.batch), 32, int(args.n), 128, 128
@@ -184,10 +204,10 @@ if __name__=='__main__':
     func = None 
     if args.method=='FleetAttention':
         func = FleetAttention
-    elif args.method=='lightningAttention':
+    elif args.method=='lightningAttention2':
         func = lightning_attn2
-    elif args.method=='rowbased':
-        func = rowBased
+    elif args.method=='causal_dot_product_torch':
+        func = causal_dot_product_torch
     elif args.method=='BCMV_vanilla':
         func = linear_attn
     elif args.method=='recursion':
@@ -196,6 +216,15 @@ if __name__=='__main__':
         func = blockBased
     elif args.method=='causal_dot_product':
         func = causal_dot_product
+    elif args.method=='lightningAttention2_torch':
+        func = lightningAttention2_torch
     else:
         raise Exception("Unimplemented Method Name.")
-    test_BCMV_by_random(args.onlyMethod,b,h,n,r,d,func,type,gpu,args.is_weight_decay)
+    output_dir = os.path.join(args.output_dir,str(args.batch),str(args.n),args.type)
+    if args.is_weight_decay:
+        output_dir = os.path.join(output_dir,'weight_decay')
+    else:
+        output_dir = os.path.join(output_dir,'no_weight_decay')
+    os.makedirs(output_dir,exist_ok=True)
+    output_path = os.path.join(output_dir,args.method+'.json')
+    test_BCMV_by_random(args.onlyMethod,b,h,n,r,d,func,type,gpu,args.is_weight_decay,output_path,args.turns)

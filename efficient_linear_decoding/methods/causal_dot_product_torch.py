@@ -1,7 +1,7 @@
 import torch
 
 
-class RowBased(torch.autograd.Function):
+class CausalDotProductTorch(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, Q, K, V, gamma=None):
@@ -28,5 +28,5 @@ class RowBased(torch.autograd.Function):
                 ans[:,:,i:i+1,:] = o
         return ans
 
-rowBased = RowBased.apply
+causal_dot_product_torch = CausalDotProductTorch.apply
 
