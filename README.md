@@ -1,4 +1,16 @@
-## An efficient Linear Attention Decoding package
+<!-- ## An efficient Linear Attention Decoding package -->
+
+# LeetDecoding: A PyTorch Library for Exponentially Decaying Causal Linear Attention with CUDA Implementations
+
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Computational-Machine-Intelligence/LeetDecoding/blob/main/LICENSE)
+[![PyPI version](https://badge.fury.io/py/LibMOON.svg)](https://pypi.org/project/leetDecoding/)
+[![Paper](https://img.shields.io/badge/arxiv-paper-blue)](https://arxiv.org/abs/2501.02573) 
+
+
+
+
+``LeetDecoding`` is an open-source library built for efficient Linear Attention Decoding. 
 
 ### 1. installation
 
@@ -61,3 +73,6 @@ output = causal_linear_decoder(Q,K,V,is_mask_weight=False,attn_method='FleetAtte
 |---|---|---|---|
 |causal_dot_product|Fast Transformers with Clustered Attention|[arxiv](https://arxiv.org/abs/2007.04825) |[code](https://github.com/idiap/fast-transformers/tree/master/fast_transformers/causal_product)|
 |Lighting Attention-2|Lightning Attention-2: A Free Lunch for Handling Unlimited Sequence Lengths in Large Language Models|[arxiv](https://arxiv.org/abs/2401.04658)|[code](https://github.com/OpenNLPLab/lightning-attention)
+|block-based| Transformer-VQ: Linear-Time Transformers via Vector Quantization|[arxiv](https://arxiv.org/abs/2309.16354) | [code](https://github.com/transformer-vq/transformer_vq)|
+|recursion| HyperAttention: Long-context Attention in Near-Linear Time|[arxiv](https://arxiv.org/abs/2310.05869) | [code](https://github.com/insuhan/hyper-attn)|
+|causal_dot_product_torch|Rethinking Attention with Performers|[arxiv](https://arxiv.org/abs/2009.14794)|[code](https://github.com/google-research/google-research/tree/master/performer)|
