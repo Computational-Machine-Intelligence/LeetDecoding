@@ -343,6 +343,235 @@ static inline __device__ __host__ int smem_buffer_elts_(const Params &params) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// template< int E, int THREADS_PER_HEAD>
+// __global__ 
+// void lmha_kernel(Lmha_params<float> params) {
+
+//   // Make sure E is a multiple of 4.
+//   static_assert(E % 4 == 0, "");
+
+//   // The amount of shared memory per buffer (2 buffers for double-buffering).
+//   const int smem_buffer_elts = smem_buffer_elts_<E>(params);
+//   // The M dimension for shared memory.
+//   const int M = round_up(params.M, 4);
+
+//   // Shared memory to store Q, K and V. Size is 2*smem_buffer_elts.
+//   extern __shared__ float smem_[];
+
+//   // The various shared memory buffers.
+//   // 存储Q，K，V，O的首地址，因为V一行有M个元素，所以sem_o首地址从2*E+M开始，因为要存储Q，K，V，O的首地址，所以seme的大小为2E+2M
+//   float *smem_q = &smem_[0*E];
+//   float *smem_k = &smem_[1*E];
+//   float *smem_v = &smem_[2*E];
+//   float *smem_o = &smem_[2*E + M];
+
+//   // The index of the shared memory buffer (for double-buffering).
+//   int smem_curr = 0;
+
+//   // The sequence processed by that block.
+//   const int bi = blockIdx.y;
+//   // The head processed by that block.
+//   const int hi = blockIdx.x;
+
+//   // The linear index of the thread.
+//   const int tidx = threadIdx.x;
+
+//   // The offset to the position loaded by the thread in Q.
+//   int offset_q = bi*params.q_stride_B + hi*params.q_stride_H + tidx;
+//   // The offset to the position loaded by the thread in K.
+//   int offset_k = bi*params.k_stride_B + hi*params.k_stride_H + tidx;
+
+
+//   // Determine the base pointers for Q and K.
+//   const float *ptr_q = &params.q[offset_q];
+//   const float *ptr_k = &params.k[offset_k];
+
+//   // The offset to the position loaded by the thread in V and O.
+//   int offset_v = bi*params.v_stride_B + hi*params.v_stride_H + tidx;
+//   int offset_o = bi*params.o_stride_B + hi*params.o_stride_H + tidx;
+
+
+//   // Determine the base pointers for V.
+//   const float *ptr_v = &params.v[offset_v];
+
+//   // Determine the base pointer for gamma
+//   float gamma = params.gamma[hi];
+
+//   // Is it an active Q/K thread?
+//   const int active_qk = tidx < params.E;
+
+//   // Trigger the memory loads for Q and K.
+//   float ldg_q = 0.f, ldg_k = 0.f;
+//   if( active_qk ) {
+//     ldg_q = *ptr_q;
+//     ldg_k = *ptr_k;
+//   }
+
+//   // Is it an active V thread?
+//   const int active_v = tidx < params.M;
+
+//   // Trigger the memory loads for V. 
+//   float ldg_v = 0.f;
+//   if( active_v ) {
+//     ldg_v = *ptr_v;
+//   }
+
+//   // Move the load pointers.
+//   ptr_q += params.q_stride_L;
+//   ptr_k += params.k_stride_L;
+//   ptr_v += params.v_stride_L;
+
+//   // The number of FLOAT4s per head.
+//   constexpr int FLOAT4s_PER_HEAD = E / 4;
+//   // The number of FLOAT4s per thread.
+//   constexpr int FLOAT4s_PER_THREAD = FLOAT4s_PER_HEAD / THREADS_PER_HEAD;
+
+//   // The storage for the K*V^T values.
+//   float4 kv[FLOAT4s_PER_THREAD]; 
+//   #pragma unroll
+//   for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//     kv[ii] = make_float4(0.f, 0.f, 0.f, 0.f);
+//   }
+
+//   // The output pointer.
+//   float *out_ptr = &params.out[offset_o];
+
+//   // Store to shared memory Q and K.
+//   if( tidx < E ) { 
+//     smem_q[smem_curr*smem_buffer_elts + tidx] = ldg_q; 
+//     smem_k[smem_curr*smem_buffer_elts + tidx] = ldg_k; 
+//   }
+
+//   // Store to shared memory V. All threads store valid values.
+//   if( tidx < M ) {
+//     smem_v[smem_curr*smem_buffer_elts + tidx] = ldg_v;
+//   }
+
+//   // The position of the thread in the V dimension.
+//   int vo = tidx / THREADS_PER_HEAD;
+//   int vi = tidx % THREADS_PER_HEAD;
+
+//   // Iterate over the timesteps.
+//   for( int ti = 0; ti < params.L; ++ti ) {
+
+//     // Is it the last iteration?
+//     int is_last = ti == params.L - 1;
+
+//     // Trigger the next loads for Q and K.
+//     if( !is_last && active_qk ) {
+//       ldg_q = *ptr_q;
+//       ldg_k = *ptr_k;
+//     }
+
+//     // Trigger the next loads for V.
+//     if( !is_last && active_v ) {
+//       ldg_v = *ptr_v;
+//     }
+
+//     // Move the load pointers.
+//     ptr_q += params.q_stride_L;
+//     ptr_k += params.k_stride_L;
+//     ptr_v += params.v_stride_L;
+
+//     // Make sure the data is in shared memory.
+//     __syncthreads();
+
+//     // Each thread loads 4 values from K.
+//     float4 k[FLOAT4s_PER_THREAD];
+//     #pragma unroll
+//     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//       int ki = tidx % THREADS_PER_HEAD * 4 + ii * THREADS_PER_HEAD * 4;
+//       k[ii] = *reinterpret_cast<const float4*>(&smem_k[smem_curr*smem_buffer_elts + ki]);
+//     }
+
+//     // Each thread loads a single V value.
+//     float v = 0.f;
+//     if( vo < params.M ) {
+//       v = *reinterpret_cast<const float *>(&smem_v[smem_curr*smem_buffer_elts + vo]);
+//     }
+
+//     // Update the K*V^T product.
+//     #pragma unroll
+//     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//       kv[ii].x += k[ii].x * v;
+//       kv[ii].y += k[ii].y * v;
+//       kv[ii].z += k[ii].z * v;
+//       kv[ii].w += k[ii].w * v;
+//     }
+
+//     // Load the Q values from shared memory.
+//     float4 q[FLOAT4s_PER_THREAD]; 
+//     #pragma unroll
+//     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//       int qi = tidx % THREADS_PER_HEAD * 4 + ii * THREADS_PER_HEAD * 4;
+//       q[ii] = *reinterpret_cast<const float4*>(&smem_q[smem_curr*smem_buffer_elts + qi]);
+//     }
+
+//     // Compute the partial output value for that thread.
+//     float sum = 0.f;
+//     #pragma unroll
+//     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//       sum += q[ii].x * kv[ii].x; 
+//       sum += q[ii].y * kv[ii].y; 
+//       sum += q[ii].z * kv[ii].z; 
+//       sum += q[ii].w * kv[ii].w; 
+//     }
+
+//     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
+//       kv[ii].x *= gamma; 
+//       kv[ii].y *= gamma; 
+//       kv[ii].z *= gamma;
+//       kv[ii].w *= gamma;
+//     }
+
+//     // Finalize the computation of the sum (if we have more than 1 thread per head).
+//     if( THREADS_PER_HEAD > 1 ) {
+
+//       // Finalize the sum for each head.
+//       #pragma unroll
+//       for( int mask = THREADS_PER_HEAD / 2; mask >= 1; mask /= 2 ) {
+//         sum += __shfl_xor_sync(uint32_t(-1), sum, mask);
+//       }
+
+//       // Store to shared memory.
+//       if( vo < M && vi == 0 ) {
+//         smem_o[smem_curr*smem_buffer_elts + vo] = sum ;
+//       }
+
+//       // Make sure the data is in shared memory.
+//       __syncthreads();
+
+//       // Active threads read the data to store.
+//       if( active_v ) {
+//         sum = smem_o[smem_curr*smem_buffer_elts + tidx];
+//       }
+
+//     } // THREADS_PER_HEAD > 1.
+
+//     // Store the output. All the threads are active.
+//     if( active_v ) {
+//       *out_ptr = sum;
+//     }
+
+//     // Move to next location.
+//     out_ptr += params.o_stride_L;
+    
+
+//     // Move the shared memory buffer.
+//     smem_curr = (smem_curr + 1) % 2;
+
+//     // Store to shared memory for Q and K.
+//     if( !is_last && tidx < E ) {
+//       smem_q[smem_curr*smem_buffer_elts + tidx] = ldg_q;
+//       smem_k[smem_curr*smem_buffer_elts + tidx] = ldg_k;
+//     }
+
+//     // Store to shared memory for V.
+//     if( !is_last && tidx < M ) {
+//       smem_v[smem_curr*smem_buffer_elts + tidx] = ldg_v;
+//     }
+//   }
+// }
 template< int E, int THREADS_PER_HEAD>
 __global__ 
 void lmha_kernel(Lmha_params<float> params) {
@@ -359,7 +588,6 @@ void lmha_kernel(Lmha_params<float> params) {
   extern __shared__ float smem_[];
 
   // The various shared memory buffers.
-  // 存储Q，K，V，O的首地址，因为V一行有M个元素，所以sem_o首地址从2*E+M开始，因为要存储Q，K，V，O的首地址，所以seme的大小为2E+2M
   float *smem_q = &smem_[0*E];
   float *smem_k = &smem_[1*E];
   float *smem_v = &smem_[2*E];
@@ -381,7 +609,6 @@ void lmha_kernel(Lmha_params<float> params) {
   // The offset to the position loaded by the thread in K.
   int offset_k = bi*params.k_stride_B + hi*params.k_stride_H + tidx;
 
-
   // Determine the base pointers for Q and K.
   const float *ptr_q = &params.q[offset_q];
   const float *ptr_k = &params.k[offset_k];
@@ -389,7 +616,6 @@ void lmha_kernel(Lmha_params<float> params) {
   // The offset to the position loaded by the thread in V and O.
   int offset_v = bi*params.v_stride_B + hi*params.v_stride_H + tidx;
   int offset_o = bi*params.o_stride_B + hi*params.o_stride_H + tidx;
-
 
   // Determine the base pointers for V.
   const float *ptr_v = &params.v[offset_v];
@@ -493,10 +719,17 @@ void lmha_kernel(Lmha_params<float> params) {
     // Update the K*V^T product.
     #pragma unroll
     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
-      kv[ii].x += k[ii].x * v;
-      kv[ii].y += k[ii].y * v;
-      kv[ii].z += k[ii].z * v;
-      kv[ii].w += k[ii].w * v;
+      float4 tmp_kv = make_float4(
+        k[ii].x * v,
+        k[ii].y * v,
+        k[ii].z * v,
+        k[ii].w * v
+      );
+      
+      kv[ii].x += tmp_kv.x;
+      kv[ii].y += tmp_kv.y;
+      kv[ii].z += tmp_kv.z;
+      kv[ii].w += tmp_kv.w;
     }
 
     // Load the Q values from shared memory.
@@ -517,6 +750,8 @@ void lmha_kernel(Lmha_params<float> params) {
       sum += q[ii].w * kv[ii].w; 
     }
 
+    // Apply decay AFTER computing output but BEFORE next iteration
+    #pragma unroll
     for( int ii = 0; ii < FLOAT4s_PER_THREAD; ++ii ) {
       kv[ii].x *= gamma; 
       kv[ii].y *= gamma; 
@@ -535,7 +770,7 @@ void lmha_kernel(Lmha_params<float> params) {
 
       // Store to shared memory.
       if( vo < M && vi == 0 ) {
-        smem_o[smem_curr*smem_buffer_elts + vo] = sum ;
+        smem_o[smem_curr*smem_buffer_elts + vo] = sum;
       }
 
       // Make sure the data is in shared memory.
@@ -555,7 +790,6 @@ void lmha_kernel(Lmha_params<float> params) {
 
     // Move to next location.
     out_ptr += params.o_stride_L;
-    
 
     // Move the shared memory buffer.
     smem_curr = (smem_curr + 1) % 2;
@@ -572,7 +806,6 @@ void lmha_kernel(Lmha_params<float> params) {
     }
   }
 }
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template< int E, int THREADS_PER_HEAD>

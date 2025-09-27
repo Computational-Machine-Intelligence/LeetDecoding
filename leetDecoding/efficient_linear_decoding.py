@@ -9,6 +9,7 @@ from leetDecoding.methods.causal_dot_product_torch import causal_dot_product_tor
 from leetDecoding.methods.BlockBased import blockBased
 from leetDecoding.methods.Recursion import recursion
 from leetDecoding.methods.lightningAttention2 import lightning_attn2
+from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
 from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_torch
 from leetDecoding.methods.FleetAttention import FleetAttention
 from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
@@ -24,6 +25,7 @@ ATTENTION_MAP = {
     "vanilla":linear_attn,
     'lightningAttention2':lightning_attn2,
     'lightningAttention2_torch':lightningAttention2_torch,
+    'lightningAttention2_optimized':lightning_attn2_optimized,
     'FleetAttention_torch':FleetAttention,
     'FleetAttention':FleetAttention_triton,
     'causal_dot_product':causal_dot_product,
@@ -68,13 +70,13 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=Tru
                 attention_method = ATTENTION_MAP[attn_method]
                 ans = attention_method(q,k,v,gamma)
             else:
-                ans = causal_dot_product(q,k,v,gamma)
+                ans = lightning_attn2_optimized(q,k,v,gamma)
         else:
             if attn_method is not None:
                 attention_method = ATTENTION_MAP[attn_method]
                 ans = attention_method(q,k,v,gamma)
             else:
-                ans = causal_dot_product(q.to(torch.float32),k.to(torch.float32),v.to(torch.float32),gamma.to(torch.float32)).to(type)
+                ans = lightning_attn2_optimized(q,k,v,gamma).to(type)
     else:
         if type == torch.float16:
             if seqlen > GPU_MAP[drv.Device(0).name()]: # sequence length must be larger than the lightningAttention block size
@@ -82,13 +84,13 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=Tru
                     attention_method = ATTENTION_MAP[attn_method]
                     ans = attention_method(q,k,v,gamma)
                 else:
-                    ans = lightning_attn2(q,k,v,gamma)
+                    ans = lightning_attn2_optimized(q,k,v,gamma)
             else:
                 if attn_method is not None:
                     attention_method = ATTENTION_MAP[attn_method]
                     ans = attention_method(q,k,v,gamma if gamma is None else torch.exp(-gamma))
                 else:
-                    ans = causal_dot_product(q,k,v,gamma if gamma is None else torch.exp(-gamma))
+                    ans = lightning_attn2_optimized(q,k,v,gamma if gamma is None else torch.exp(-gamma))
         elif type == torch.float32:
             if batch_size > 1 and seqlen>=1024: 
                 if gamma is None:
@@ -96,19 +98,19 @@ def causal_linear_decoder(q,k,v,is_mask_weight=False, gamma=None,is_need_exp=Tru
                         attention_method = ATTENTION_MAP[attn_method]
                         ans = attention_method(q,k,v)
                     else:
-                        ans = causal_dot_product(q,k,v)
+                        ans = lightning_attn2_optimized(q,k,v)
                 else:
                     if attn_method is not None:
                         attention_method = ATTENTION_MAP[attn_method]
                         ans = attention_method(q,k,v,torch.exp(-gamma))
                     else:
-                        ans = causal_dot_product(q,k,v,torch.exp(-gamma))
+                        ans = lightning_attn2_optimized(q,k,v,torch.exp(-gamma))
             else:
                 if attn_method is not None:
                     attention_method = ATTENTION_MAP[attn_method]
                     ans = attention_method(q,k,v,gamma)
                 else:
-                    ans = lightning_attn2(q,k,v,gamma)
+                    ans = lightning_attn2_optimized(q,k,v,gamma)
         else:
             raise Exception('Not implement the type',type)
     return ans

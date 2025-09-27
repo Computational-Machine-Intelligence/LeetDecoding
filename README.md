@@ -3,17 +3,17 @@
 # LeetDecoding: A PyTorch Library for Exponentially Decaying Causal Linear Attention with CUDA Implementations
 
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Computational-Machine-Intelligence/LeetDecoding/blob/main/LICENSE)
-[![PyPI version](https://badge.fury.io/py/LibMOON.svg)](https://pypi.org/project/leetDecoding/)
-[![Paper](https://img.shields.io/badge/arxiv-paper-blue)](https://arxiv.org/abs/2501.02573) 
+[[License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Computational-Machine-Intelligence/LeetDecoding/blob/main/LICENSE)
+[[PyPI version](https://badge.fury.io/py/LibMOON.svg)](https://pypi.org/project/leetDecoding/)
+[[Paper](https://img.shields.io/badge/arxiv-paper-blue)](https://arxiv.org/abs/2501.02573) 
 
 
 
 
 ``LeetDecoding`` is an open-source library built for efficient Linear Attention Decoding. 
 
-### 1. installation
-
+### 1. Installation
+#### 1. From Pypi 
 ```bash
 conda create -n leetDecoding python==3.9
 conda activate leetDecoding
@@ -30,11 +30,17 @@ numpy<2
 ```
 You can use the following command to install:
 ```python
-pip install triton==2.1.0
-pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install triton
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 pip install pycuda
 pip install pynvml
 pip install numpy
+```
+#### 2. From SourceCode
+```python
+conda create -n leetDecoding python==3.9
+conda activate leetDecoding
+python setup.py develop
 ```
 
 ### 2. usage

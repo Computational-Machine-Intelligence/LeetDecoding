@@ -9,8 +9,9 @@ import pycuda.autoinit
 GPU_MAP = {
     "NVIDIA RTX A6000": 32, 
     "NVIDIA A100-PCIE-40GB": 128, 
-    'NVIDIA A100 80GB PCIe': 128, 
-    'NVIDIA A800-SXM4-80GB': 128,
+    "NVIDIA A100 80GB PCIe": 128, 
+    "NVIDIA A800-SXM4-80GB": 128,
+    "NVIDIA H20": 64,
 }
 
 # Compute the causal linear attention of the ordinary mask
@@ -131,7 +132,7 @@ def _fwd_kernel(
     block_decay = tl.exp(-s.to(tl.float32) * BLOCK)
     # diag decay
     index = off_block[:, None] - off_block[None, :]
-    s_index = s * index
+    s_index = (s * index).to(tl.float32)
     s_index = tl.where(index >= 0, -s_index, float("-inf"))
     diag_decay = tl.exp(s_index)
     kv = tl.zeros([d, BLOCK_MODEL], dtype=tl.float32)
@@ -233,4 +234,3 @@ if __name__=='__main__':
     ans =lightning_attn2(Q,K,V,gamma)
     correct_ans = torch.matmul(torch.tril(torch.matmul(Q,K.transpose(2,3))) ,V)
     print('ours norm:',torch.norm(ans),'\ncorrect norm:',torch.norm(correct_ans),'\ndifference norm:',torch.norm(correct_ans-ans))
-

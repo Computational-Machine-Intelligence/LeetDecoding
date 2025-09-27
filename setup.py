@@ -23,7 +23,7 @@ setuptools.setup(
     #     ]
     # ),
     platforms = "any",
-    install_requires=["pycuda", "triton==2.1.0","pynvml"], 
+    install_requires=["pycuda", "triton", "pynvml", "pandas"], 
     include_package_data=True,
     # package_dir={"":"efficient_linear_decoding"},
     python_requires=">=3.8",

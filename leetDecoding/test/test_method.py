@@ -10,6 +10,7 @@ from leetDecoding.methods.FleetAttention import FleetAttention
 from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_torch
 from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
 from leetDecoding.methods.linear_attn import linear_attn, _build_slope_tensor
+from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
 import argparse
 import torch.utils.benchmark as benchmark
 import os
@@ -132,17 +133,30 @@ def benchmark_memory(fn, *inputs, desc="", verbose=True, **kwinputs):
     return mem
     
     
-def test_BCMV_by_random(onlyMethod,b,h,n,r,d,method,type,device,is_weight_decay,output_path,turns):
+def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,output_path,turns):
+    device='cuda'
     B = torch.randn(b,h,n,r,dtype=type,device=device)
     C = torch.randn(b,h,n,r,dtype=type,device=device)
     V = torch.randn(b,h,n,d,dtype=type,device=device)
+    # B = torch.rand(b,h,n,r,dtype=type,device=device) * 0.2
+    # C = torch.rand(b,h,n,r,dtype=type,device=device) * 0.2
+    # V = torch.rand(b,h,n,d,dtype=type,device=device) * 0.2
+
+    # low = 0
+    # high = 2
+    # B = torch.randint(low, high, (b, h, n, r), dtype=torch.int32, device=device).to(type)
+    # C = torch.randint(low, high, (b, h, n, r), dtype=torch.int32, device=device).to(type)
+    # V = torch.randint(low, high, (b, h, n, d), dtype=torch.int32, device=device).to(type)
+
+
+
     if is_weight_decay:
         s = _build_slope_tensor(h).to(dtype=type,device=device).reshape(h)
-    if onlyMethod:
+    if speedup_check:
         res = {}
         for i in range(turns):
             if is_weight_decay:
-                if method !=lightning_attn2 and method != recursion and method!=blockBased and method !=lightningAttention2_torch:
+                if method !=lightning_attn2 and method != recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                     _,t = benchmark_forward(method,B,C,V,torch.exp(-s),verbose=True)
                     benchmark_memory(method,B,C,V,torch.exp(-s),verbose=False)
                 else:
@@ -162,25 +176,27 @@ def test_BCMV_by_random(onlyMethod,b,h,n,r,d,method,type,device,is_weight_decay,
         res['variance']=variance
         res['upper_bound']=max_time-mean
         res['lower_bound']=mean-min_time
-        print('avg:',mean,' variance:',variance,'upper_bound:',max_time-mean,'lower_bound:',mean-min_time)
+        print('avg:',mean,' variance:',variance,'std:',math.sqrt(variance),'upper_bound:',max_time-mean,'lower_bound:',mean-min_time)
         # with open(os.path.join(output_path),'w') as f:
         #     json.dump(res,f,ensure_ascii=False)                
     else:
         if is_weight_decay:
             correct_BCMV = linear_attn(B,C,V,s)
-            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch:
+            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                 BCMV = method(B,C,V,torch.exp(-s))
                 benchmark_memory(method,B,C,V,torch.exp(-s),verbose=True)
             else:
                 BCMV = method(B,C,V,s)
                 benchmark_memory(method,B,C,V,s,verbose=True)
-            print('method norm:',torch.norm(BCMV),'vanilla norm:',torch.norm(correct_BCMV),'difference norm:',torch.norm(BCMV-correct_BCMV))
+            # import pdb 
+            # pdb.set_trace()
+            print(f'method norm:{torch.norm(BCMV)}      vanilla norm:{torch.norm(correct_BCMV)}     difference norm:{torch.norm(BCMV-correct_BCMV)} {torch.allclose(BCMV,correct_BCMV,rtol=1e-2)}')
         else:
             M = torch.tril(torch.ones((n,n),dtype=type,device=device))
             correct_BCMV = torch.matmul(torch.matmul(B,C.transpose(2,3)) * M,V)
             BCMV = method(B,C,V)
             benchmark_memory(method,B,C,V,verbose=True)
-            print('method norm:',torch.norm(BCMV),'vanilla norm:',torch.norm(correct_BCMV),'difference norm:',torch.norm(BCMV-correct_BCMV))
+            print(f'method norm:{torch.norm(BCMV)}      vanilla norm:{torch.norm(correct_BCMV)}     difference norm:{torch.norm(BCMV-correct_BCMV)} {torch.allclose(BCMV,correct_BCMV,rtol=1e-2)}')
 
 
 
@@ -191,9 +207,9 @@ def benchmark_method(method,device='cuda',dtype='float32',batch_size=1,is_weight
         dtype=torch.float16
     else:
         raise Exception('Not implement the type',dtype)
-    n_list = [128,512,2048,8192,12800, 25600,100000]
+    n_list = [128, 500]
     data = {
-        'seqlen': [128, 512, 2048, 8192, 12800, 25600, 100000],
+        'seqlen': [],
         'time': [],
     }
     for n in n_list:
@@ -214,9 +230,11 @@ def benchmark_method(method,device='cuda',dtype='float32',batch_size=1,is_weight
             print(f'There is a error: {e}')
         finally:
             data['time'].append(t)
+            data['seqlen'].append(n)
     df = pd.DataFrame(data)
     print('Benchmark Performance:\n',df.T)
     
+
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -225,9 +243,9 @@ if __name__=='__main__':
     parser.add_argument('--method',default='FleetAttention', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention2, BCMV_vanilla, causal_dot_product_torch, recursion, blockbased, causal_dot_product,lightningAttention2_torch.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, the default is float16.',default='float16')
     parser.add_argument('--gpu',type=int,help='gpu number, default is 0.',default=3)
-    parser.add_argument('--is_weight_decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
-    parser.add_argument('--onlyMethod',action='store_true',help='Whether to test only methods and not vanilla. If enabled, only methods are tested. If disabled, other methods are tested.') 
-    parser.add_argument('--output_dir',type=str,default='/mnt/wjp/experiment_MMLU/output/single_layer')
+    parser.add_argument('--is-weight-decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
+    parser.add_argument('--speedup-check',action='store_true',help='Whether to check speedup. If enabled, speed are tested. If disabled,it will check the precision between vanilla and the corresponding method.') 
+    parser.add_argument('--output-dir',type=str,default='/home/wjp/projects/LA/outputs/single_layer')
     parser.add_argument('--turns',type=int,default=15)
     args = parser.parse_args()
 
@@ -236,11 +254,14 @@ if __name__=='__main__':
         type = torch.float16
     elif args.type=='float32':
         type = torch.float32
+    elif args.type=="bfloat16":
+        type = torch.bfloat16
     else:
         pass
-    gpu = "cuda:"+str(args.gpu)
-    torch.cuda.set_device(gpu)
-    device = torch.device(gpu)
+    # gpu = "cuda:"+str(args.gpu)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    # torch.cuda.set_device(gpu)
+    # device = torch.device(gpu)
     
     func = None 
     if args.method=='FleetAttention_torch':
@@ -261,6 +282,8 @@ if __name__=='__main__':
         func = causal_dot_product
     elif args.method=='lightningAttention2_torch':
         func = lightningAttention2_torch
+    elif args.method=="lightningAttention2_optimized":
+        func = lightning_attn2_optimized
     else:
         raise Exception("Unimplemented Method Name.")
     output_dir = os.path.join(args.output_dir,str(args.batch),str(args.n),args.type)
@@ -270,4 +293,7 @@ if __name__=='__main__':
         output_dir = os.path.join(output_dir,'no_weight_decay')
     os.makedirs(output_dir,exist_ok=True)
     output_path = os.path.join(output_dir,args.method+'.json')
-    test_BCMV_by_random(args.onlyMethod,b,h,n,r,d,func,type,gpu,args.is_weight_decay,output_path,args.turns)
+    test_BCMV_by_random(args.speedup_check,b,h,n,r,d,func,type,args.is_weight_decay,output_path,args.turns)
+
+
+# python test/test_method.py --batch 1 --n 1000 --method lightningAttention2_optimized --type bfloat16 --gpu 7  --is-weight-decay
