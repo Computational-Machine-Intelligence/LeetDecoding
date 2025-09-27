@@ -3,9 +3,9 @@
 # LeetDecoding: A PyTorch Library for Exponentially Decaying Causal Linear Attention with CUDA Implementations
 
 
-[[License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Computational-Machine-Intelligence/LeetDecoding/blob/main/LICENSE)
-[[PyPI version](https://badge.fury.io/py/LibMOON.svg)](https://pypi.org/project/leetDecoding/)
-[[Paper](https://img.shields.io/badge/arxiv-paper-blue)](https://arxiv.org/abs/2501.02573) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Computational-Machine-Intelligence/LeetDecoding/blob/main/LICENSE)
+[![PyPI version](https://badge.fury.io/py/LibMOON.svg)](https://pypi.org/project/leetDecoding/)
+[![Paper](https://img.shields.io/badge/arxiv-paper-blue)](https://arxiv.org/abs/2501.02573) 
 
 
 
