@@ -1,7 +1,8 @@
-/build/
-/dist/
-/leetDecoding.egg-info/
+build/
+dist/
+leetDecoding.egg-info/
 .pypic
 .DS_Store
-/test/
-/leetDecoding/methods/build/
+test/
+leetDecoding/methods/build/
+__pycache__/

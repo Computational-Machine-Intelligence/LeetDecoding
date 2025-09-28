@@ -8,18 +8,24 @@ import triton.language as tl
 @triton.autotune(
     configs=[
         # small BLOCK_MODEL
+        triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 16}, num_warps=4, num_stages=3),
         triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 16}, num_warps=8, num_stages=3),
         # triton.Config({'BLOCK': 512, 'BLOCK_MODEL': 16}, num_warps=8, num_stages=4),
 
         # middle BLOCK_MODEL
+        triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=3),
         triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=3),
         # triton.Config({'BLOCK': 512, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=4),
 
         # large BLOCK_MODEL
+        triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
         triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 64}, num_warps=4, num_stages=3),
         triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 64}, num_warps=8, num_stages=3),
