@@ -7,7 +7,7 @@ import pycuda.driver as drv
 import pycuda.autoinit
 
 GPU_MAP = {
-    "NVIDIA RTX A6000": 64, 
+    "NVIDIA RTX A6000": 32, 
     "NVIDIA A100-PCIE-40GB": 128, 
     "NVIDIA A100 80GB PCIe": 128, 
     "NVIDIA A800-SXM4-80GB": 128,

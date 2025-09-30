@@ -281,6 +281,9 @@ if __name__=='__main__':
         func = causal_dot_product
     elif args.method=='lightningAttention2_torch':
         func = lightningAttention2_torch
+    elif args.method=='lightningAttention2_origin':
+        from lightning_attn.ops import lightning_attn_func
+        func = lightning_attn_func
     elif args.method=="lightningAttention2_optimized":
         func = lightning_attn2_optimized
     else:

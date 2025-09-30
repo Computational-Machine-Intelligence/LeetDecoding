@@ -24,6 +24,8 @@ class CausalDotProduct(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, Q, K, V, gamma=None):
+        if gamma is not None:
+            gamma = gamma.squeeze().to(Q.dtype)
         # Create the output tensor
         dtype = Q.dtype
         device = Q.device

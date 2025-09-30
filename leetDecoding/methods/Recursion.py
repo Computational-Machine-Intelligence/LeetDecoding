@@ -47,6 +47,7 @@ class Recursion(torch.autograd.Function):
         b,h,n,r = Q.shape
         d = V.shape[-1]
         if gamma is not None:
+            gamma = gamma.to(Q.dtype)
             ans = recursive_infer_with_decay(Q,K,V,0,n,gamma,32)
         else:
             ans = recursive_infer(Q,K,V,0,n,32)
