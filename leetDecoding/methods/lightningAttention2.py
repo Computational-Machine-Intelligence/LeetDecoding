@@ -3,8 +3,6 @@
 import torch
 import triton
 import triton.language as tl
-import pycuda.driver as drv
-import pycuda.autoinit
 
 GPU_MAP = {
     "NVIDIA RTX A6000": 32,
@@ -169,7 +167,7 @@ def _fwd_kernel(
 
 
 class LightningAttention2(torch.autograd.Function):
-    lightning_block_size = GPU_MAP[drv.Device(0).name()] # By default, the first GPU is selected as the computing device.
+    lightning_block_size = GPU_MAP[torch.cuda.get_device_name(0)] # By default, the first GPU is selected as the computing device.
     
     @staticmethod
     def forward(ctx, q, k, v, s=None):

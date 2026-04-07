@@ -6,26 +6,16 @@ import triton.language as tl
 def make_fwd_kernel_without_s(configs=None):
     if configs is None:
         configs = [
-            # small BLOCK_MODEL
-            triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 16}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 16}, num_warps=4, num_stages=3),
-            triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 16}, num_warps=8, num_stages=3),
-
-            # middle BLOCK_MODEL
-            triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=3),
-            triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=3),
-
-            # large BLOCK_MODEL
-            triton.Config({'BLOCK': 16,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 64}, num_warps=4, num_stages=3),
-            triton.Config({'BLOCK': 256, 'BLOCK_MODEL': 64}, num_warps=8, num_stages=3),
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=1),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=1),
+            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=1),
+            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=1),
         ]
 
     @triton.autotune(configs=configs, key=['d', 'e'])
@@ -70,19 +60,19 @@ def make_fwd_kernel_without_s(configs=None):
         for i in range(NUM_BLOCK):
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
-                             other=0.0)
+                             other=0.0).to(tl.float32)
 
-            qk = tl.dot(q_tile, k_curr, out_dtype=tl.float32) * diag_decay
-            o_intra = tl.dot(qk.to(DTYPE), v_curr, out_dtype=tl.float32)
-            o_inter = tl.dot(q_tile, kv.to(DTYPE), out_dtype=tl.float32) * q_decay
+            qk = tl.dot(q_tile, k_curr.to(tl.float32), out_dtype=tl.float32) * diag_decay
+            o_intra = tl.dot(qk, v_curr.to(tl.float32), out_dtype=tl.float32)
+            o_inter = tl.dot(q_tile, kv, out_dtype=tl.float32) * q_decay
             o_tile = o_intra + o_inter
 
             tl.store(O_ptr + off_block[:, None] * e,
                      o_tile.to(DTYPE),
                      mask=off_block[:, None] < n)
 
-            k_decayed = k_curr * k_trans_decay.to(DTYPE)
-            kv = block_decay * kv + tl.dot(k_decayed, v_curr, out_dtype=tl.float32)
+            k_decayed = k_curr.to(tl.float32) * k_trans_decay
+            kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
 
             if i < NUM_BLOCK - 1:
                 next_off = off_block + BLOCK
@@ -100,12 +90,21 @@ def make_fwd_kernel_without_s(configs=None):
 
 def make_fwd_kernel_all(configs=None):
     if configs is None:
+        # 根据共享内存限制 (~101376 bytes, d=128) 筛选安全配置：
+        # BLOCK=128,BLOCK_MODEL=64 即使 stages=1 也 OOM；
+        # BLOCK=128,BLOCK_MODEL=32,stages=2 OOM；
+        # BLOCK=64, BLOCK_MODEL=64,stages=2 OOM。
         configs = [
-            triton.Config({'BLOCK': block, "BLOCK_MODEL": bm}, num_warps=num_warps, num_stages=num_stages)
-            for block in [32, 64]
-            for bm in [32, 64]
-            for num_warps in [2, 4, 8]
-            for num_stages in [2, 3, 4]
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
+            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=1),
+            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=1),
+            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=1),
+            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=1),
         ]
 
     @triton.autotune(configs=configs, key=['d', 'e'])
@@ -152,19 +151,19 @@ def make_fwd_kernel_all(configs=None):
         for i in range(NUM_BLOCK):
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
-                             other=0.0)
+                             other=0.0).to(tl.float32)
 
-            qk = tl.dot(q_tile, k_curr, out_dtype=tl.float32) * diag_decay
-            o_intra = tl.dot(qk.to(DTYPE), v_curr, out_dtype=tl.float32)
-            o_inter = tl.dot(q_tile, kv.to(DTYPE), out_dtype=tl.float32) * q_decay
+            qk = tl.dot(q_tile, k_curr.to(tl.float32), out_dtype=tl.float32) * diag_decay
+            o_intra = tl.dot(qk, v_curr.to(tl.float32), out_dtype=tl.float32)
+            o_inter = tl.dot(q_tile, kv, out_dtype=tl.float32) * q_decay
             o_tile = o_intra + o_inter
 
             tl.store(O_ptr + off_block[:, None] * e,
                      o_tile.to(DTYPE),
                      mask=off_block[:, None] < n)
 
-            k_decayed = k_curr * k_trans_decay.to(DTYPE)
-            kv = block_decay * kv + tl.dot(k_decayed, v_curr, out_dtype=tl.float32)
+            k_decayed = k_curr.to(tl.float32) * k_trans_decay
+            kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
 
             if i < NUM_BLOCK - 1:
                 next_off = off_block + BLOCK
@@ -184,9 +183,16 @@ def make_fwd_kernel_all(configs=None):
 # LightningAttention2 with configurable autotune
 # -----------------------------
 
+# 缓存 kernel，避免每次 forward 重新创建
+_CACHED_KERNEL_WITH_S = None
+_CACHED_KERNEL_WITHOUT_S = None
+
+
 class LightningAttention2(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q, k, v, s=None, autotune_configs=None):
+        global _CACHED_KERNEL_WITH_S, _CACHED_KERNEL_WITHOUT_S
+        
         q = q.contiguous()
         k = k.contiguous()
         v = v.contiguous()
@@ -197,14 +203,19 @@ class LightningAttention2(torch.autograd.Function):
         e = v.shape[-1]
         o = torch.empty((b, h, n, e), dtype=q.dtype, device=q.device)
 
-        # Choose kernel based on s
+        # 使用缓存的 kernel
         if s is None:
-            kernel = make_fwd_kernel_without_s(autotune_configs)
+            if _CACHED_KERNEL_WITHOUT_S is None:
+                _CACHED_KERNEL_WITHOUT_S = make_fwd_kernel_without_s(autotune_configs)
+            kernel = _CACHED_KERNEL_WITHOUT_S
         else:
-            kernel = make_fwd_kernel_all(autotune_configs)
+            if _CACHED_KERNEL_WITH_S is None:
+                _CACHED_KERNEL_WITH_S = make_fwd_kernel_all(autotune_configs)
+            kernel = _CACHED_KERNEL_WITH_S
 
-        max_block_model = max(cfg.kwargs['BLOCK_MODEL'] for cfg in kernel.configs)
-        grid = (b * h, triton.cdiv(e, max_block_model))
+        # grid 必须是 callable，让 triton 在 autotune 确定 BLOCK_MODEL 后再计算，
+        # 否则用 max(BLOCK_MODEL) 预固定会导致部分 e 维度的 program 根本不会被启动。
+        grid = lambda meta: (b * h, triton.cdiv(e, meta['BLOCK_MODEL']))
 
         dtype_triton = tl.float32
         if q.dtype == torch.float16:

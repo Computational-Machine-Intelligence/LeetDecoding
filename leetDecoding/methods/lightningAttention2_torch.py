@@ -11,7 +11,7 @@ def lightningAttention2_torch(q,k,v,gamma=None):
         e = v.shape[-1]
         NUM_BLOCK = (n + BLOCK - 1) // BLOCK
         # other
-        array = torch.arange(BLOCK).to(q) + 1  ## !!!! important
+        array = torch.arange(BLOCK).to(q)  # 对齐标准实现
         q_decay = torch.exp(-gamma * array.reshape(-1, 1))
         k_decay = torch.exp(-gamma * (BLOCK - array.reshape(-1, 1)))
         index = array[:, None] - array[None, :]
@@ -48,7 +48,7 @@ def lightningAttention2_torch(q,k,v,gamma=None):
         e = v.shape[-1]
         NUM_BLOCK = (n + BLOCK - 1) // BLOCK
 
-        array = torch.arange(BLOCK).to(q) + 1  ## !!!! important
+        array = torch.arange(BLOCK).to(q)  # 对齐标准实现
         index = array[:, None] - array[None, :]
         diag_decay = torch.where(index >= 0, 1, 0).to(torch.float32)
         kv = torch.zeros(b, h, d, e).to(q.device)

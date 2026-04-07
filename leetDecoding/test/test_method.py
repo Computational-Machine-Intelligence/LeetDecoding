@@ -135,6 +135,8 @@ def benchmark_memory(fn, *inputs, desc="", verbose=True, **kwinputs):
     
 def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,output_path,turns):
     device='cuda'
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
     B = torch.randn(b,h,n,r,dtype=type,device=device)
     C = torch.randn(b,h,n,r,dtype=type,device=device)
     V = torch.randn(b,h,n,d,dtype=type,device=device)

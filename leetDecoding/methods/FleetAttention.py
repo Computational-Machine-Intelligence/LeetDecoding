@@ -2,24 +2,51 @@ import torch
 
 
 def discounted_cumsum(x, s):
-    b,h,n,d = x.shape
-    s = s.view(h,1,1)
-    p = torch.cumsum(torch.log(s).expand(-1,-1,n),dim=-1)
-    return torch.exp(p.view(1,h,n,1) + torch.logcumsumexp(torch.log(x)-p.view(1,h,n,1),dim=-2))
+    """
+    Compute discounted cumulative sum: result[t] = sum_{j=0}^{t} s^(t-j) * x[j]
+    
+    Uses iterative recursion instead of log/exp tricks to avoid
+    numerical issues when x contains zeros or negative values.
+    """
+    b, h, n, d = x.shape
+    s_f = s.view(1, h, 1).float()
+    
+    result = torch.empty_like(x, dtype=torch.float32)
+    cv = torch.zeros(b, h, d, device=x.device, dtype=torch.float32)
+    
+    x_f = x.float()
+    for t in range(n):
+        cv = cv * s_f + x_f[:, :, t]
+        result[:, :, t] = cv
+    
+    return result
 
-def FleetAttention(Q,K,V,gamma=None):
-    b,h,n,r = Q.shape
+
+def FleetAttention(Q, K, V, gamma=None):
+    b, h, n, r = Q.shape
     d = V.shape[-1]
-    type = Q.dtype
+    orig_dtype = Q.dtype
     device = Q.device
-    ans = torch.zeros_like(V,device=device,dtype=type)
+    
+    ans = torch.zeros(b, h, n, d, device=device, dtype=torch.float32)
+    
+    Q_f = Q.float()   # [b,h,n,r]
+    K_f = K.float()   # [b,h,n,r]
+    V_f = V.float()   # [b,h,n,d]
+    
     if gamma is None:
         for i in range(r):
-            ans += Q[:,:,:,i].unsqueeze(-1) * torch.cumsum(K[:,:,:,i].unsqueeze(-1)* V,dim=-2)
+            ki = K_f[:, :, :, i]     # [b,h,n]
+            qi = Q_f[:, :, :, i]     # [b,h,n]
+            cv = torch.cumsum(ki.unsqueeze(-1) * V_f, dim=-2)  # [b,h,n,d]
+            ans += qi.unsqueeze(-1) * cv
     else:
+        gamma_f = gamma.float()
         for i in range(r):
-            ans += Q[:,:,:,i].unsqueeze(-1) * discounted_cumsum(K[:,:,:,i].unsqueeze(-1)* V,gamma)
-    return ans
-
+            qi = Q_f[:, :, :, i]     # [b,h,n]
+            ki = K_f[:, :, :, i]     # [b,h,n]
+            kv = ki.unsqueeze(-1) * V_f  # [b,h,n,d]
+            cv = discounted_cumsum(kv, gamma_f)  # [b,h,n,d]
+            ans += qi.unsqueeze(-1) * cv
     
-   
+    return ans.to(orig_dtype)
