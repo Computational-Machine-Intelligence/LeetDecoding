@@ -8,6 +8,7 @@ from leetDecoding.methods.causal_dot_product_torch import causal_dot_product_tor
 from leetDecoding.methods.BlockBased import blockBased
 from leetDecoding.methods.Recursion import recursion
 from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_torch
+from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
 from leetDecoding.methods.FleetAttention import FleetAttention
 from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
 
