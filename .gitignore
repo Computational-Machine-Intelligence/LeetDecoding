@@ -3,6 +3,7 @@ dist/
 leetDecoding.egg-info/
 .pypic
 .DS_Store
-test/
+
 leetDecoding/methods/build/
 __pycache__/
+/outputs/

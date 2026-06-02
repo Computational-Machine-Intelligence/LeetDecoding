@@ -241,7 +241,7 @@ def benchmark_method(method,device='cuda',dtype='float32',batch_size=1,is_weight
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch',help='The batch size of the test, the default is 1',default=1)
-    parser.add_argument('--n',help='The sequence length of the test, the default is 8192',default=2048)
+    parser.add_argument('--n',help='The sequence length of the test, the default is 2048',default=2048)
     parser.add_argument('--method',default='FleetAttention', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention2, BCMV_vanilla, causal_dot_product_torch, recursion, blockbased, causal_dot_product,lightningAttention2_torch.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, the default is float16.',default='float16')
     parser.add_argument('--is-weight-decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
