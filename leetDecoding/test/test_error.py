@@ -70,8 +70,9 @@ def resolve_method(method_name):
 
 def build_decay_mask_fp64(seqlen, slopes, device):
     positions = torch.arange(seqlen, device=device, dtype=torch.float64)
-    distance = positions[:, None] - positions[None, :]
-    causal = (distance >= 0).to(torch.float64)
+    raw_distance = positions[:, None] - positions[None, :]
+    distance = raw_distance.clamp_min(0)
+    causal = (raw_distance >= 0).to(torch.float64)
     decay = torch.exp(-slopes.to(torch.float64).reshape(-1, 1, 1) * distance.unsqueeze(0))
     return decay * causal.unsqueeze(0)
 
