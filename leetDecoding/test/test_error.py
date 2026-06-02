@@ -143,7 +143,7 @@ def summarize_results(results, trials):
                 item['max_rel_error'] = max(errors)
             summary.append(item)
     summary.sort(key=lambda item: (item['method'], item['dtype']))
-    print(f'Reference: BCMV_vanilla exact FP64 over {trials} trial(s)')
+    print(f'Reference: BCMV_vanilla exact FP64 on dtype-quantized inputs over {trials} trial(s)')
     print('| Method | Dtype | Mean Rel. Error | Max Rel. Error | Success |')
     print('| --- | --- | --- | --- | --- |')
     for item in summary:
@@ -176,7 +176,11 @@ def maybe_save_exact_output(save_path, exact_output):
     save_dir = os.path.dirname(save_path)
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-    torch.save(exact_output.detach().cpu(), save_path)
+    if isinstance(exact_output, dict):
+        payload = {dtype_name: tensor.detach().cpu() for dtype_name, tensor in exact_output.items()}
+    else:
+        payload = exact_output.detach().cpu()
+    torch.save(payload, save_path)
 
 
 if __name__ == '__main__':
@@ -211,7 +215,7 @@ if __name__ == '__main__':
         '--save-exact-output',
         type=str,
         default=None,
-        help='Optional .pt path to save the first trial BCMV_vanilla FP64 output tensor.',
+        help='Optional .pt path to save the first-trial FP64 reference. Saves a dict keyed by dtype when multiple dtypes are requested.',
     )
     args = parser.parse_args()
 
@@ -241,10 +245,7 @@ if __name__ == '__main__':
             args.seed + trial_idx,
             args.is_weight_decay,
         )
-        exact_output = bcmv_vanilla_fp64(q64, k64, v64, slopes64)
-        if not saved_exact_output:
-            maybe_save_exact_output(args.save_exact_output, exact_output)
-            saved_exact_output = True
+        first_trial_exact_outputs = {} if not saved_exact_output else None
 
         for dtype_name in args.dtypes:
             dtype = DTYPE_MAP[dtype_name]
@@ -252,6 +253,13 @@ if __name__ == '__main__':
             k = k64.to(dtype=dtype)
             v = v64.to(dtype=dtype)
             slopes = None if slopes64 is None else slopes64.to(dtype=dtype)
+            q_ref = q.to(torch.float64)
+            k_ref = k.to(torch.float64)
+            v_ref = v.to(torch.float64)
+            slopes_ref = None if slopes is None else slopes.to(torch.float64)
+            exact_output = bcmv_vanilla_fp64(q_ref, k_ref, v_ref, slopes_ref)
+            if first_trial_exact_outputs is not None:
+                first_trial_exact_outputs[dtype_name] = exact_output
 
             for method_name in args.methods:
                 stats = results[method_name][dtype_name]
@@ -263,11 +271,18 @@ if __name__ == '__main__':
                     stats['failed_trials'] += 1
                     stats['last_error'] = str(exc)
 
+        if first_trial_exact_outputs is not None:
+            exact_output_payload = first_trial_exact_outputs
+            if len(first_trial_exact_outputs) == 1:
+                exact_output_payload = next(iter(first_trial_exact_outputs.values()))
+            maybe_save_exact_output(args.save_exact_output, exact_output_payload)
+            saved_exact_output = True
+
     summary = summarize_results(results, args.trials)
     maybe_save_json(
         args.output_path,
         {
-            'reference': 'BCMV_vanilla FP64',
+            'reference': 'BCMV_vanilla FP64 on dtype-quantized inputs',
             'config': {
                 'batch': args.batch,
                 'heads': args.heads,
