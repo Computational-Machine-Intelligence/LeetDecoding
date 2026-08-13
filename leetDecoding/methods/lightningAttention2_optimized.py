@@ -6,6 +6,14 @@ import triton.language as tl
 def make_fwd_kernel_without_s(configs=None):
     if configs is None:
         configs = [
+            # RTX 5090 (sm_120) safe fallbacks: opt-in shared memory per block is only
+            # 101376 B (99 KB). At large d (e.g. rank=512) the kv accumulator
+            # (d*BLOCK_MODEL*4 B) plus staged K/V tiles blow the limit for the
+            # A100-sized configs below, so keep small-block configs first.
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=2, num_stages=1),
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 32}, num_warps=1, num_stages=1),
+            triton.Config({'BLOCK': 32, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
@@ -95,6 +103,13 @@ def make_fwd_kernel_all(configs=None):
         # BLOCK=128,BLOCK_MODEL=32,stages=2 OOM；
         # BLOCK=64, BLOCK_MODEL=64,stages=2 OOM。
         configs = [
+            # RTX 5090 (sm_120) safe fallbacks: shared memory per block is limited to
+            # 101376 B (99 KB). At large d (e.g. rank=512) only small-block configs fit;
+            # autotune skips OOM configs and picks the fastest one that compiles.
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=2, num_stages=1),
+            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 32}, num_warps=1, num_stages=1),
+            triton.Config({'BLOCK': 32, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
             triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
