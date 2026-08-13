@@ -51,10 +51,23 @@ def linear_attn(q, k, v, s=None):
     b, h, n, r = q.shape
     d = v.shape[-1]
     if s is not None:
-        mask = get_full_mask(n, s).to(q.device).to(torch.float32)
-        qk = torch.matmul(q, k.transpose(2, 3))
-        qk = (qk.to(torch.float32) * mask).to(q.dtype)
-        o = torch.matmul(qk, v)
+        # Chunked over query rows: the naive version materializes an (h, n, n)
+        # fp32 mask (~8 GiB at n=8192) plus (b, h, n, n) fp32 scores (~8 GiB),
+        # which OOMs on 32 GB GPUs. Chunking only the query dimension keeps
+        # memory at O(chunk * n) and produces the same per-row mask values.
+        chunk = 1024
+        k_t = k.transpose(2, 3)
+        o = torch.empty((b, h, n, d), dtype=q.dtype, device=q.device)
+        slopes = s.to(torch.float32).reshape(h, 1, 1)
+        cols = torch.arange(n, device=q.device, dtype=torch.float32)
+        for start in range(0, n, chunk):
+            end = min(start + chunk, n)
+            rows = torch.arange(start, end, device=q.device, dtype=torch.float32)
+            rel = rows[:, None] - cols[None, :]
+            mask = torch.where(rel >= 0, torch.exp(-slopes * rel.unsqueeze(0)), torch.zeros((), device=q.device))
+            qk = torch.matmul(q[:, :, start:end], k_t).to(torch.float32)
+            o[:, :, start:end] = torch.matmul((qk * mask).to(q.dtype), v)
+        return o
     else:
         M = torch.tril(torch.ones(n,n,device=q.device,dtype=q.dtype))
         o = torch.matmul(torch.matmul(q, k.transpose(2, 3)) * M, v)

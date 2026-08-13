@@ -68,9 +68,18 @@ def resolve_method(method_name):
     return METHOD_MAP[method_name]
 
 
-def build_decay_mask_fp64(seqlen, slopes, device):
+# Row-chunk size for the exact FP64 reference (query dimension).
+_REF_CHUNK = 1024
+
+
+def build_decay_mask_fp64(seqlen, slopes, device, start=0):
+    # Row-chunked mask builder: the full mask is (heads, seqlen, seqlen) fp64,
+    # which needs ~16 GiB at seqlen=8192. Chunking the query rows keeps memory
+    # at O(chunk * seqlen) and yields the same per-row values.
+    end = min(start + _REF_CHUNK, seqlen)
     positions = torch.arange(seqlen, device=device, dtype=torch.float64)
-    raw_distance = positions[:, None] - positions[None, :]
+    row_positions = torch.arange(start, end, device=device, dtype=torch.float64)
+    raw_distance = row_positions[:, None] - positions[None, :]
     distance = raw_distance.clamp_min(0)
     causal = (raw_distance >= 0).to(torch.float64)
     decay = torch.exp(-slopes.to(torch.float64).reshape(-1, 1, 1) * distance.unsqueeze(0))
@@ -78,13 +87,28 @@ def build_decay_mask_fp64(seqlen, slopes, device):
 
 
 def bcmv_vanilla_fp64(q, k, v, slopes=None):
-    scores = torch.matmul(q, k.transpose(2, 3))
+    # Exact FP64 reference, computed in query-row chunks. The naive version
+    # materializes scores/mask of shape (b, h, seqlen, seqlen) fp64 (~16 GiB at
+    # seqlen=8192) and OOMs on 32 GB GPUs. Chunking the query dimension only
+    # changes GEMM blocking, not the per-row reduction, so results are unchanged
+    # up to fp64 rounding.
     seqlen = q.shape[2]
+    k_t = k.transpose(2, 3)
+    out = torch.empty_like(v)
     if slopes is None:
-        mask = torch.tril(torch.ones((seqlen, seqlen), device=q.device, dtype=torch.float64))
-        return torch.matmul(scores * mask, v)
-    decay_mask = build_decay_mask_fp64(seqlen, slopes, q.device)
-    return torch.matmul(scores * decay_mask.unsqueeze(0), v)
+        positions = torch.arange(seqlen, device=q.device)
+        for start in range(0, seqlen, _REF_CHUNK):
+            end = min(start + _REF_CHUNK, seqlen)
+            scores_chunk = torch.matmul(q[:, :, start:end], k_t)
+            mask_chunk = (positions[start:end, None] >= positions[None, :]).to(torch.float64)
+            out[:, :, start:end] = torch.matmul(scores_chunk * mask_chunk, v)
+    else:
+        for start in range(0, seqlen, _REF_CHUNK):
+            end = min(start + _REF_CHUNK, seqlen)
+            scores_chunk = torch.matmul(q[:, :, start:end], k_t)
+            decay_chunk = build_decay_mask_fp64(seqlen, slopes, q.device, start=start)
+            out[:, :, start:end] = torch.matmul(scores_chunk * decay_chunk, v)
+    return out
 
 
 def make_trial_inputs(batch_size, heads, seqlen, rank, dim, device, seed, is_weight_decay):
