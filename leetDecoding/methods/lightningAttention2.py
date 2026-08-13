@@ -169,9 +169,30 @@ def _fwd_kernel(
         off_block += BLOCK
 
 
+def _shared_mem_limit():
+    props = torch.cuda.get_device_properties(0)
+    return getattr(props, 'shared_memory_per_block_optin', None) or props.shared_memory_per_block
+
+
+def _default_block_size(dtype, head_dim):
+    name = torch.cuda.get_device_name(0)
+    base = GPU_MAP.get(name, 32)
+    if dtype == torch.float32:
+        block = max(base // 2, 8)
+    else:
+        block = base
+    # RTX 5090 (and similar) opt-in shared memory is 101376 B. Default Triton
+    # num_stages plus large head dim (RetNet d=256) overshoots that limit.
+    smem = _shared_mem_limit()
+    if smem is not None and smem <= 101376 and head_dim >= 128:
+        block = min(block, 16)
+    return block
+
+
 class LightningAttention2(torch.autograd.Function):
-    lightning_block_size = GPU_MAP[torch.cuda.get_device_name(0)] # By default, the first GPU is selected as the computing device.
-    
+    lightning_block_size = GPU_MAP.get(
+        torch.cuda.get_device_name(0) if torch.cuda.is_available() else '', 32)
+
     @staticmethod
     def forward(ctx, q, k, v, s=None):
         q = q.contiguous()
@@ -182,45 +203,34 @@ class LightningAttention2(torch.autograd.Function):
         b, h, n, d = q.shape
         e = v.shape[-1]
         o = torch.empty((b, h, n, e), dtype=q.dtype, device=q.device)
-        if q.dtype == torch.float16 or q.dtype ==torch.bfloat16:
-            BLOCK = LightningAttention2.lightning_block_size # The larger the BLOCK, the more shared memory is required.
-        elif q.dtype == torch.float32:
-            BLOCK = LightningAttention2.lightning_block_size // 2
-        NUM_BLOCK = triton.cdiv(q.shape[2], BLOCK)
-        # parallel over channel
+        BLOCK = _default_block_size(q.dtype, d)
         BLOCK_MODEL = min(triton.next_power_of_2(e), 32)
-        grid = (b * h, triton.cdiv(e, BLOCK_MODEL))
-        if s is None:
-            _fwd_kernel_without_s[grid](
-                q,
-                k,
-                v,
-                o,
-                b,
-                h,
-                n,
-                d,
-                e,
-                BLOCK=BLOCK,
-                NUM_BLOCK=NUM_BLOCK,
-                BLOCK_MODEL=BLOCK_MODEL,
-            )
-        else:
-            _fwd_kernel[grid](
-                q,
-                k,
-                v,
-                o,
-                s,
-                b,
-                h,
-                n,
-                d,
-                e,
-                BLOCK=BLOCK,
-                NUM_BLOCK=NUM_BLOCK,
-                BLOCK_MODEL=BLOCK_MODEL,
-            )
+        kernel = _fwd_kernel_without_s if s is None else _fwd_kernel
+        from triton.runtime.errors import OutOfResources
+        while True:
+            NUM_BLOCK = triton.cdiv(n, BLOCK)
+            grid = (b * h, triton.cdiv(e, BLOCK_MODEL))
+            try:
+                if s is None:
+                    kernel[grid](
+                        q, k, v, o, b, h, n, d, e,
+                        BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, BLOCK_MODEL=BLOCK_MODEL,
+                        num_warps=4, num_stages=1,
+                    )
+                else:
+                    kernel[grid](
+                        q, k, v, o, s, b, h, n, d, e,
+                        BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, BLOCK_MODEL=BLOCK_MODEL,
+                        num_warps=4, num_stages=1,
+                    )
+                break
+            except OutOfResources:
+                if BLOCK <= 8 and BLOCK_MODEL <= 16:
+                    raise
+                if BLOCK_MODEL > 16:
+                    BLOCK_MODEL = max(16, BLOCK_MODEL // 2)
+                else:
+                    BLOCK = max(8, BLOCK // 2)
         return o
     
 lightning_attn2 = LightningAttention2.apply

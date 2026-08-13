@@ -3,28 +3,43 @@ import triton
 import triton.language as tl
 
 
+def _shared_mem_limit():
+    props = torch.cuda.get_device_properties(0)
+    return getattr(props, 'shared_memory_per_block_optin', None) or props.shared_memory_per_block
+
+
+def _default_autotune_configs():
+    configs = [
+        # RTX 5090 (sm_120) safe fallbacks: opt-in shared memory per block is only
+        # 101376 B (99 KB). At large d (e.g. rank=512 / RetNet d=256) the kv
+        # accumulator plus staged K/V tiles blow the limit for A100-sized configs.
+        triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
+        triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=2, num_stages=1),
+        triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 32}, num_warps=1, num_stages=1),
+        triton.Config({'BLOCK': 32, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=2),
+        triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
+        triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=1),
+        triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=1),
+        triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=1),
+        triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=1),
+    ]
+    smem = _shared_mem_limit()
+    if smem is not None and smem <= 101376:
+        configs = [
+            c for c in configs
+            if c.kwargs['BLOCK'] <= 32 and c.kwargs['BLOCK_MODEL'] <= 32 and c.num_stages <= 1
+        ]
+    return configs
+
+
 def make_fwd_kernel_without_s(configs=None):
     if configs is None:
-        configs = [
-            # RTX 5090 (sm_120) safe fallbacks: opt-in shared memory per block is only
-            # 101376 B (99 KB). At large d (e.g. rank=512) the kv accumulator
-            # (d*BLOCK_MODEL*4 B) plus staged K/V tiles blow the limit for the
-            # A100-sized configs below, so keep small-block configs first.
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=2, num_stages=1),
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 32}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 32, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=1),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=1),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=1),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=1),
-        ]
+        configs = _default_autotune_configs()
 
     @triton.autotune(configs=configs, key=['d', 'e'])
     @triton.jit
@@ -98,29 +113,7 @@ def make_fwd_kernel_without_s(configs=None):
 
 def make_fwd_kernel_all(configs=None):
     if configs is None:
-        # 根据共享内存限制 (~101376 bytes, d=128) 筛选安全配置：
-        # BLOCK=128,BLOCK_MODEL=64 即使 stages=1 也 OOM；
-        # BLOCK=128,BLOCK_MODEL=32,stages=2 OOM；
-        # BLOCK=64, BLOCK_MODEL=64,stages=2 OOM。
-        configs = [
-            # RTX 5090 (sm_120) safe fallbacks: shared memory per block is limited to
-            # 101376 B (99 KB). At large d (e.g. rank=512) only small-block configs fit;
-            # autotune skips OOM configs and picks the fastest one that compiles.
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 16}, num_warps=2, num_stages=1),
-            triton.Config({'BLOCK': 16, 'BLOCK_MODEL': 32}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 32, 'BLOCK_MODEL': 16}, num_warps=1, num_stages=1),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 32,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=4, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 32}, num_warps=8, num_stages=2),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=4, num_stages=1),
-            triton.Config({'BLOCK': 64,  'BLOCK_MODEL': 64}, num_warps=8, num_stages=1),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=4, num_stages=1),
-            triton.Config({'BLOCK': 128, 'BLOCK_MODEL': 32}, num_warps=8, num_stages=1),
-        ]
+        configs = _default_autotune_configs()
 
     @triton.autotune(configs=configs, key=['d', 'e'])
     @triton.jit
