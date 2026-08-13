@@ -5,6 +5,9 @@ import triton
 import triton.language as tl
 
 GPU_MAP = {
+    # Blackwell (sm_120), including the RTX 5090. Use the conservative
+    # block size used by the RTX A6000 until a larger tuned value is known.
+    "NVIDIA GeForce RTX 5090": 32,
     "NVIDIA RTX A6000": 32,
     "NVIDIA A100-PCIE-40GB": 128, 
     "NVIDIA A100 80GB PCIe": 128, 
