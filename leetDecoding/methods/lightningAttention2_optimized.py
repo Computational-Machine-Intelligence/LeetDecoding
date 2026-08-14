@@ -81,6 +81,16 @@ def make_fwd_kernel_without_s(configs=None):
                          other=0.0)
 
         for i in range(NUM_BLOCK):
+            # Prefetch the next K/V tile before consuming the current tile so
+            # its memory latency can overlap with the current computation.
+            next_off = off_block + BLOCK
+            k_next = tl.load(K_ptr + next_off[None, :] * d,
+                             mask=next_off[None, :] < n,
+                             other=0.0)
+            v_next = tl.load(V_ptr + next_off[:, None] * e,
+                             mask=next_off[:, None] < n,
+                             other=0.0)
+
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
                              other=0.0).to(tl.float32)
@@ -97,14 +107,8 @@ def make_fwd_kernel_without_s(configs=None):
             k_decayed = k_curr.to(tl.float32) * k_trans_decay
             kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
 
-            if i < NUM_BLOCK - 1:
-                next_off = off_block + BLOCK
-                k_curr = tl.load(K_ptr + next_off[None, :] * d,
-                                 mask=next_off[None, :] < n,
-                                 other=0.0)
-                v_curr = tl.load(V_ptr + next_off[:, None] * e,
-                                 mask=next_off[:, None] < n,
-                                 other=0.0)
+            k_curr = k_next
+            v_curr = v_next
 
             off_block += BLOCK
 
@@ -157,6 +161,16 @@ def make_fwd_kernel_all(configs=None):
                          other=0.0)
 
         for i in range(NUM_BLOCK):
+            # Prefetch the next K/V tile before consuming the current tile so
+            # its memory latency can overlap with the current computation.
+            next_off = off_block + BLOCK
+            k_next = tl.load(K_ptr + next_off[None, :] * d,
+                             mask=next_off[None, :] < n,
+                             other=0.0)
+            v_next = tl.load(V_ptr + next_off[:, None] * e,
+                             mask=next_off[:, None] < n,
+                             other=0.0)
+
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
                              other=0.0).to(tl.float32)
@@ -173,14 +187,8 @@ def make_fwd_kernel_all(configs=None):
             k_decayed = k_curr.to(tl.float32) * k_trans_decay
             kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
 
-            if i < NUM_BLOCK - 1:
-                next_off = off_block + BLOCK
-                k_curr = tl.load(K_ptr + next_off[None, :] * d,
-                                 mask=next_off[None, :] < n,
-                                 other=0.0)
-                v_curr = tl.load(V_ptr + next_off[:, None] * e,
-                                 mask=next_off[:, None] < n,
-                                 other=0.0)
+            k_curr = k_next
+            v_curr = v_next
 
             off_block += BLOCK
 
