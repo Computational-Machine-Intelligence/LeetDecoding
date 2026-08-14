@@ -13,6 +13,7 @@ from leetDecoding.methods.causal_dot_product import causal_dot_product
 from leetDecoding.methods.causal_dot_product_torch import causal_dot_product_torch
 from leetDecoding.methods.lightningAttention2 import lightning_attn2
 from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
+from leetDecoding.methods.lightningAttention2_prefetch import lightning_attn2_prefetch
 from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_torch
 from leetDecoding.methods.linear_attn import _build_slope_tensor, linear_attn
 
@@ -21,6 +22,8 @@ METHOD_MAP = {
     'FleetAttention_torch': FleetAttention,
     'FleetAttention': FleetAttention_triton,
     'lightningAttention2': lightning_attn2,
+    'lightningAttention2_prefetch': lightning_attn2_prefetch,
+    'LA_prefetch': lightning_attn2_prefetch,
     'causal_dot_product_torch': causal_dot_product_torch,
     'BCMV_vanilla': linear_attn,
     'recursion': recursion,
@@ -33,6 +36,8 @@ METHOD_MAP = {
 METHODS_USING_SLOPE = {
     'BCMV_vanilla',
     'lightningAttention2',
+    'lightningAttention2_prefetch',
+    'LA_prefetch',
     'recursion',
     'blockbased',
     'lightningAttention2_torch',
@@ -44,6 +49,7 @@ DEFAULT_METHODS = [
     'FleetAttention',
     'FleetAttention_torch',
     'lightningAttention2',
+    'lightningAttention2_prefetch',
     'lightningAttention2_torch',
     'lightningAttention2_optimized',
     'causal_dot_product',
