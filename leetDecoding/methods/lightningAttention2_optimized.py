@@ -91,21 +91,27 @@ def make_fwd_kernel_without_s(configs=None):
                              mask=next_off[:, None] < n,
                              other=0.0)
 
+            # Keep Q/K/V in their input dtype so FP16/BF16 inputs use the
+            # corresponding Tensor Core paths. Dot products accumulate in
+            # FP32; only matrix operands are converted back to the input dtype.
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
-                             other=0.0).to(tl.float32)
+                             other=0.0)
 
-            qk = tl.dot(q_tile, k_curr.to(tl.float32), out_dtype=tl.float32) * diag_decay
-            o_intra = tl.dot(qk, v_curr.to(tl.float32), out_dtype=tl.float32)
-            o_inter = tl.dot(q_tile, kv, out_dtype=tl.float32) * q_decay
+            qk = (
+                tl.dot(q_tile, k_curr, out_dtype=tl.float32) * diag_decay
+            ).to(DTYPE)
+            o_intra = tl.dot(qk, v_curr, out_dtype=tl.float32)
+            o_inter = tl.dot(q_tile, kv.to(DTYPE), out_dtype=tl.float32) * q_decay
             o_tile = o_intra + o_inter
 
             tl.store(O_ptr + off_block[:, None] * e,
                      o_tile.to(DTYPE),
                      mask=off_block[:, None] < n)
 
-            k_decayed = k_curr.to(tl.float32) * k_trans_decay
-            kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
+            k_decayed = k_curr * k_trans_decay.to(DTYPE)
+            kv_update = tl.dot(k_decayed, v_curr, out_dtype=tl.float32)
+            kv = block_decay * kv + kv_update
 
             k_curr = k_next
             v_curr = v_next
@@ -171,21 +177,27 @@ def make_fwd_kernel_all(configs=None):
                              mask=next_off[:, None] < n,
                              other=0.0)
 
+            # Keep Q/K/V in their input dtype so FP16/BF16 inputs use the
+            # corresponding Tensor Core paths. Dot products accumulate in
+            # FP32; only matrix operands are converted back to the input dtype.
             q_tile = tl.load(Q_ptr + off_block[:, None] * d,
                              mask=off_block[:, None] < n,
-                             other=0.0).to(tl.float32)
+                             other=0.0)
 
-            qk = tl.dot(q_tile, k_curr.to(tl.float32), out_dtype=tl.float32) * diag_decay
-            o_intra = tl.dot(qk, v_curr.to(tl.float32), out_dtype=tl.float32)
-            o_inter = tl.dot(q_tile, kv, out_dtype=tl.float32) * q_decay
+            qk = (
+                tl.dot(q_tile, k_curr, out_dtype=tl.float32) * diag_decay
+            ).to(DTYPE)
+            o_intra = tl.dot(qk, v_curr, out_dtype=tl.float32)
+            o_inter = tl.dot(q_tile, kv.to(DTYPE), out_dtype=tl.float32) * q_decay
             o_tile = o_intra + o_inter
 
             tl.store(O_ptr + off_block[:, None] * e,
                      o_tile.to(DTYPE),
                      mask=off_block[:, None] < n)
 
-            k_decayed = k_curr.to(tl.float32) * k_trans_decay
-            kv = block_decay * kv + tl.dot(k_decayed, v_curr.to(tl.float32))
+            k_decayed = k_curr * k_trans_decay.to(DTYPE)
+            kv_update = tl.dot(k_decayed, v_curr, out_dtype=tl.float32)
+            kv = block_decay * kv + kv_update
 
             k_curr = k_next
             v_curr = v_next
