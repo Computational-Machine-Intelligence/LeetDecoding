@@ -11,7 +11,6 @@ from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_t
 from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
 from leetDecoding.methods.linear_attn import linear_attn, _build_slope_tensor
 from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
-from leetDecoding.methods.lightningAttention2_prefetch import lightning_attn2_prefetch
 import argparse
 import torch.utils.benchmark as benchmark
 import os
@@ -159,7 +158,7 @@ def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,outp
         res = {}
         for i in range(turns):
             if is_weight_decay:
-                if method !=lightning_attn2 and method != lightning_attn2_prefetch and method != recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
+                if method !=lightning_attn2 and method != recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                     _,t = benchmark_forward(method,B,C,V,torch.exp(-s),verbose=True)
                     benchmark_memory(method,B,C,V,torch.exp(-s),verbose=False)
                 else:
@@ -185,7 +184,7 @@ def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,outp
     else:
         if is_weight_decay:
             correct_BCMV = linear_attn(B,C,V,s)
-            if method !=lightning_attn2 and method != lightning_attn2_prefetch and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
+            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                 BCMV = method(B,C,V,torch.exp(-s))
                 benchmark_memory(method,B,C,V,torch.exp(-s),verbose=True)
             else:
@@ -243,7 +242,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch',help='The batch size of the test, the default is 1',default=1)
     parser.add_argument('--n',help='The sequence length of the test, the default is 2048',default=2048)
-    parser.add_argument('--method',default='FleetAttention', help='The method under test will execute both vanilla and the corresponding method. Supported LA variants include lightningAttention2, lightningAttention2_prefetch (alias LA_prefetch), and lightningAttention2_optimized.')
+    parser.add_argument('--method',default='FleetAttention', help='The method under test will execute both vanilla and the corresponding method. The method can be FleetAttention, lightningAttention2, BCMV_vanilla, causal_dot_product_torch, recursion, blockbased, causal_dot_product,lightningAttention2_torch.')
     parser.add_argument('--type',help='Numeric type, including float16, float32, bfloat16, the default is float16.',default='float16')
     parser.add_argument('--is-weight-decay',action='store_true',help='Whether to use weight decay. If it is turned on, it means weight decay is used. If it is not turned on, it means weight decay is not used. The default is not to use weight decay.')
     parser.add_argument('--speedup-check',action='store_true',help='Whether to check speedup. If enabled, speed are tested. If disabled,it will check the precision between vanilla and the corresponding method.') 
@@ -272,8 +271,6 @@ if __name__=='__main__':
         func = FleetAttention_triton
     elif args.method=='lightningAttention2':
         func = lightning_attn2
-    elif args.method in {'lightningAttention2_prefetch', 'LA_prefetch'}:
-        func = lightning_attn2_prefetch
     elif args.method=='causal_dot_product_torch':
         func = causal_dot_product_torch
     elif args.method=='BCMV_vanilla':
