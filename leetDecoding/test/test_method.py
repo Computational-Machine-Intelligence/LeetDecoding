@@ -11,6 +11,7 @@ from leetDecoding.methods.lightningAttention2_torch import lightningAttention2_t
 from leetDecoding.methods.FleetAttention_triton import FleetAttention_triton
 from leetDecoding.methods.linear_attn import linear_attn, _build_slope_tensor
 from leetDecoding.methods.lightningAttention2_optimized import lightning_attn2_optimized
+from leetDecoding.methods.lightningAttention2_prefetch import lightning_attn2_prefetch
 import argparse
 import torch.utils.benchmark as benchmark
 import os
@@ -158,7 +159,7 @@ def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,outp
         res = {}
         for i in range(turns):
             if is_weight_decay:
-                if method !=lightning_attn2 and method != recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
+                if method !=lightning_attn2 and method != lightning_attn2_prefetch and method != recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                     _,t = benchmark_forward(method,B,C,V,torch.exp(-s),verbose=True)
                     benchmark_memory(method,B,C,V,torch.exp(-s),verbose=False)
                 else:
@@ -184,7 +185,7 @@ def test_BCMV_by_random(speedup_check,b,h,n,r,d,method,type,is_weight_decay,outp
     else:
         if is_weight_decay:
             correct_BCMV = linear_attn(B,C,V,s)
-            if method !=lightning_attn2 and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
+            if method !=lightning_attn2 and method != lightning_attn2_prefetch and method!=linear_attn and method!=recursion and method!=blockBased and method !=lightningAttention2_torch and method != lightning_attn2_optimized:
                 BCMV = method(B,C,V,torch.exp(-s))
                 benchmark_memory(method,B,C,V,torch.exp(-s),verbose=True)
             else:
@@ -288,6 +289,8 @@ if __name__=='__main__':
         func = lightning_attn_func
     elif args.method=="lightningAttention2_optimized":
         func = lightning_attn2_optimized
+    elif args.method in {"lightningAttention2_prefetch", "LA_prefetch"}:
+        func = lightning_attn2_prefetch
     else:
         raise Exception("Unimplemented Method Name.")
     output_dir = os.path.join(args.output_dir,str(args.batch),str(args.n),args.type)
